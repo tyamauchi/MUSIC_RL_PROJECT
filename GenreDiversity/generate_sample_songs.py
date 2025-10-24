@@ -34,4 +34,4 @@ for i in range(100):
 
 df = pd.DataFrame(rows, columns=["song_id","title","danceability","energy","tempo","valence","genre"])
 df.to_csv("songs_100.csv", index=False)
-print("✅ songs_100.csv を作成しました")
+print("songs_100.csv を作成しました")
