@@ -36,6 +36,7 @@ class LSTMUserSimulator(nn.Module):
         self.output_layer = nn.Sequential(
             nn.Linear(hidden_sizes[2], 64),
             nn.ReLU(),
+            nn.Dropout(0.3),
             nn.Linear(64, 1),
             nn.Sigmoid()
         )
@@ -48,6 +49,99 @@ class LSTMUserSimulator(nn.Module):
         completion_prob = self.output_layer(out3)
         return completion_prob, (hidden1, hidden2, hidden3)
 
+def pretrain_user_simulator(simulator, n_episodes=500, batch_size=32):
+    """
+    LSTMユーザーシミュレータを事前学習
+    
+    目的: 現実的なユーザー応答パターンを学習させる
+    """
+    print("=" * 60)
+    print("LSTMユーザーシミュレータの事前学習を開始...")
+    print("=" * 60)
+    
+    optimizer = optim.Adam(simulator.parameters(), lr=0.001)
+    criterion = nn.BCELoss()
+    
+    # 合成データ生成パラメータ
+    track_pool_size = 1000
+    track_qualities = np.random.rand(track_pool_size) * 0.4 + 0.6  # 0.6-1.0
+    
+    for episode in range(n_episodes):
+        # セッションの長さ
+        session_length = 20
+        
+        # シミュレートされたセッション
+        states = []
+        targets = []
+        
+        # ユーザーの好みを設定
+        user_genre_pref = np.random.rand(10) * 0.4 + 0.6
+        track_genres = np.random.randint(0, 10, track_pool_size)
+        
+        track_history = []
+        response_history = []
+        
+        for step in range(session_length):
+            # ランダムに曲を選択
+            action = np.random.randint(0, track_pool_size)
+            
+            # 状態を構築
+            current_state = track_history + [0.0] * (20 - len(track_history))
+            current_state += response_history + [0.0] * (20 - len(response_history))
+            current_state.append(float(action))
+            
+            # ターゲット応答を計算（ルールベース）
+            base_response = track_qualities[action]
+            genre_match = user_genre_pref[track_genres[action]]
+            target_response = base_response * 0.6 + genre_match * 0.4
+            
+            # 連続性ボーナス
+            if len(response_history) > 0:
+                prev_avg = np.mean(response_history[-3:])
+                if abs(target_response - prev_avg) < 0.15:
+                    target_response += 0.05
+            
+            # 重複ペナルティ
+            if action in track_history:
+                target_response *= 0.3
+            
+            # ノイズ追加
+            target_response += np.random.normal(0, 0.02)
+            target_response = np.clip(target_response, 0.0, 1.0)
+            
+            states.append(current_state)
+            targets.append(target_response)
+            
+            track_history.append(action)
+            response_history.append(target_response)
+        
+        # バッチ学習
+        for i in range(0, len(states), batch_size):
+            batch_states = states[i:i+batch_size]
+            batch_targets = targets[i:i+batch_size]
+            
+            if len(batch_states) < 2:
+                continue
+            
+            state_tensor = torch.FloatTensor(batch_states).unsqueeze(1).to(DEVICE)
+            target_tensor = torch.FloatTensor(batch_targets).unsqueeze(1).unsqueeze(2).to(DEVICE)
+            
+            outputs, _ = simulator(state_tensor)
+            loss = criterion(outputs, target_tensor)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(simulator.parameters(), 1.0)
+            optimizer.step()
+        
+        if (episode + 1) % 100 == 0:
+            print(f"事前学習 Episode {episode + 1}/{n_episodes}, Loss: {loss.item():.4f}")
+    
+    print("=" * 60)
+    print(f"事前学習完了! 最終Loss: {loss.item():.4f}")
+    print("=" * 60)
+    print()
+
 class ActionHeadDQN(nn.Module):
     """Action Head DQN for playlist generation"""
     def __init__(self, state_dim, action_feature_dim):
@@ -56,6 +150,7 @@ class ActionHeadDQN(nn.Module):
         self.state_net = nn.Sequential(
             nn.Linear(state_dim, 256),
             nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(256, 128),
             nn.ReLU()
         )
@@ -63,6 +158,7 @@ class ActionHeadDQN(nn.Module):
         self.action_net = nn.Sequential(
             nn.Linear(action_feature_dim, 128),
             nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(128, 64),
             nn.ReLU()
         )
@@ -129,29 +225,30 @@ class MusicEnvironment:
         self.current_step = 0
         self.track_history = []
         self.response_history = []
-        # ユーザーの気分状態（エピソードごとに変化）
         self.user_mood = np.random.uniform(0.6, 1.0)
-        self.user_pickiness = np.random.uniform(0.0, 0.3)  # 気難しさ
+        self.user_pickiness = np.random.uniform(0.0, 0.3)
         
     def reset(self):
         self.current_step = 0
         self.track_history = [0.0] * (self.state_dim // 2)
         self.response_history = [0.0] * (self.state_dim // 2)
-        # エピソードごとに異なるユーザー特性を設定
         self.user_mood = np.random.uniform(0.6, 1.0)
         self.user_pickiness = np.random.uniform(0.0, 0.3)
         return self._get_state()
 
     def step(self, action):
         state = self._get_state()
-        state_tensor = torch.FloatTensor([state + [float(action)]]).unsqueeze(0)
-        response_prob, _ = self.user_simulator(state_tensor)
+        state_tensor = torch.FloatTensor([state + [float(action)]]).unsqueeze(0).to(DEVICE)
+        
+        with torch.no_grad():
+            response_prob, _ = self.user_simulator(state_tensor)
         response = float(response_prob.squeeze())
         
         self.track_history[self.current_step] = float(action)
         self.response_history[self.current_step] = response
         self.current_step += 1
         
+        # 報酬計算
         base_reward = 10 * np.log1p(response * 2)
         
         if self.current_step > 1:
@@ -221,14 +318,16 @@ class DQNAgent:
         self.target_net.load_state_dict(self.policy_net.state_dict())
         
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LEARNING_RATE)
-        # 固定学習率スケジューラーに変更（ReduceLROnPlateauを使わない）
-        # Cosine Annealing with Warm Restartsを使用
-        self.scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
-            T_0=50,      # 50エピソードごとに学習率をリセット
-            T_mult=1,    # リスタート間隔を一定に保つ
-            eta_min=5e-5 # 最小学習率
+            mode='max',
+            factor=0.7,
+            patience=30,
+            min_lr=5e-5,
+            verbose=False
         )
+        
         self.memory = ReplayBuffer()
         self.steps_done = 0
         self.max_grad_norm = 1.0
@@ -236,7 +335,7 @@ class DQNAgent:
     def select_action(self, state, action_features, epsilon):
         if random.random() > epsilon:
             with torch.no_grad():
-                state_tensor = torch.FloatTensor(state)
+                state_tensor = torch.FloatTensor(state).to(DEVICE)
                 q_values = self.policy_net(state_tensor, action_features)
                 
                 state_array = np.array(state)
@@ -245,7 +344,7 @@ class DQNAgent:
                 
                 for i in range(action_features.size(0)):
                     if i in track_history:
-                        action_penalties[0, i] = -0.5
+                        action_penalties[0, i] = -1.0
                 
                 q_values += action_penalties
                 return torch.argmax(q_values).item()
@@ -256,22 +355,9 @@ class DQNAgent:
         if len(self.memory) < BATCH_SIZE:
             return 0.0
         
-        if len(self.memory) < INITIAL_MEMORY:
-            actual_batch_size = min(48, len(self.memory))
-        else:
-            actual_batch_size = min(BATCH_SIZE, len(self.memory))
-            
-        if self.steps_done % 50 == 0:
-            actual_batch_size = min(128, len(self.memory))
-            
-        if len(self.memory) > actual_batch_size * 2:
-            actual_batch_size = int(actual_batch_size * 1.5)
+        actual_batch_size = BATCH_SIZE
         
-        total_loss = 0.0
-        n_updates = 1
-        
-        for _ in range(n_updates):
-            states, actions, action_features, rewards, next_states, dones = self.memory.sample(actual_batch_size)
+        states, actions, action_features, rewards, next_states, dones = self.memory.sample(actual_batch_size)
         
         states = states.to(DEVICE)
         actions = actions.to(DEVICE)
@@ -306,38 +392,38 @@ def save_models(user_simulator, agent, save_path='saved_models'):
     torch.save(agent.policy_net.state_dict(), f'{save_path}/dqn_model.pth')
 
 def main():
-    # TensorBoard writerの初期化
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_dir = f'runs/music_rl_{timestamp}'
     writer = SummaryWriter(log_dir)
     print(f"TensorBoard ログディレクトリ: {log_dir}")
     print(f"起動コマンド: tensorboard --logdir=runs")
     
-    # Initialize parameters
     state_dim = 40
     action_feature_dim = 64
     track_pool_size = 1000
     session_length = state_dim // 2
     
-    # User Simulatorを初期化し、より現実的な応答を生成するように設定
+    # LSTMユーザーシミュレータを初期化
     user_simulator = LSTMUserSimulator(state_dim + 1).to(DEVICE)
     
-    # User Simulatorに事前学習的な初期化を適用（バイアスを調整して高い応答率を促進）
-    with torch.no_grad():
-        # 出力層の最終バイアスを調整して、初期応答率を高める
-        user_simulator.output_layer[-2].bias.fill_(2.0)  # Sigmoid前のバイアスを正の値に
+    # 事前学習を実行
+    pretrain_user_simulator(user_simulator, n_episodes=500)
+    
+    # 事前学習済みモデルを保存
+    os.makedirs('saved_models', exist_ok=True)
+    torch.save(user_simulator.state_dict(), 'saved_models/user_simulator_pretrained.pth')
+    print("事前学習済みシミュレータを保存しました\n")
     
     env = MusicEnvironment(user_simulator, track_pool_size, session_length, state_dim)
     agent = DQNAgent(state_dim, action_feature_dim)
     
-    # Training parameters
     n_episodes = 300
     epsilon_start = 1.0
-    epsilon_end = 0.35  # さらに高い最小探索率
-    epsilon_decay = 0.998  # さらに緩やかな減衰
+    epsilon_end = 0.10
+    epsilon_decay = 0.996
     
     patience = 50
-    min_delta = 0.0005
+    min_delta = 1.0
     min_episodes = 100
     best_avg_reward = float('-inf')
     patience_counter = 0
@@ -347,9 +433,9 @@ def main():
     rewards_history = []
     moving_avg_window = 10
     
-    # TensorBoard用の追加メトリクス
-    step_rewards = []
-    step_losses = []
+    print("=" * 60)
+    print("DQNエージェントの学習を開始...")
+    print("=" * 60)
     
     for episode in range(n_episodes):
         state = env.reset()
@@ -364,28 +450,16 @@ def main():
             action = agent.select_action(state, action_features, epsilon)
             next_state, reward, done = env.step(action)
             
-            try:
-                selected_action_feat = action_features[action].cpu().detach()
-            except Exception:
-                selected_action_feat = action_features.cpu().detach()
+            selected_action_feat = action_features[action].cpu().detach()
             agent.memory.push(state, action, selected_action_feat, reward, next_state, done)
             
             loss = agent.train_step()
             total_loss += loss
             total_reward += reward
             
-            # ステップごとのメトリクスを記録
-            step_rewards.append(reward)
-            step_losses.append(loss)
-            
-            # TensorBoard: ステップごとのメトリクス
             global_step = episode * session_length + episode_step
             writer.add_scalar('Step/Reward', reward, global_step)
             writer.add_scalar('Step/Loss', loss, global_step)
-            writer.add_scalar('Step/Q_Value_Mean', 
-                            agent.policy_net(torch.FloatTensor(state).to(DEVICE), 
-                                           action_features).mean().item(), 
-                            global_step)
             
             state = next_state
             episode_step += 1
@@ -396,83 +470,50 @@ def main():
                 
                 agent.scheduler.step(avg_reward)
                 
-                # TensorBoard: エピソードごとのメトリクス
                 writer.add_scalar('Episode/Total_Reward', total_reward, episode)
                 writer.add_scalar('Episode/Average_Reward', avg_reward, episode)
                 writer.add_scalar('Episode/Average_Loss', total_loss/session_length, episode)
                 writer.add_scalar('Episode/Epsilon', epsilon, episode)
                 writer.add_scalar('Episode/Learning_Rate', 
                                 agent.optimizer.param_groups[0]['lr'], episode)
-                writer.add_scalar('Episode/Memory_Size', len(agent.memory), episode)
                 
-                # TensorBoard: 環境メトリクスを詳細に記録
                 avg_response = np.mean(env.response_history)
                 response_std = np.std(env.response_history)
-                response_min = np.min(env.response_history)
-                response_max = np.max(env.response_history)
-                response_range = response_max - response_min
                 
                 writer.add_scalar('Environment/Average_Response', avg_response, episode)
                 writer.add_scalar('Environment/Response_Std', response_std, episode)
-                writer.add_scalar('Environment/Response_Min', response_min, episode)
-                writer.add_scalar('Environment/Response_Max', response_max, episode)
-                writer.add_scalar('Environment/Response_Range', response_range, episode)
-                writer.add_scalar('Environment/Response_Consistency', 1.0 - response_std, episode)
-                writer.add_scalar('Environment/User_Mood', env.user_mood, episode)
-                writer.add_scalar('Environment/User_Pickiness', env.user_pickiness, episode)
                 
-                # ヒストグラム: 応答の分布
-                writer.add_histogram('Distribution/Response_History', 
-                                    np.array(env.response_history), episode)
-                writer.add_histogram('Distribution/Step_Rewards', 
-                                    np.array(step_rewards[-session_length:]), episode)
-                
-                # ネットワークパラメータのヒストグラム
-                for name, param in agent.policy_net.named_parameters():
-                    writer.add_histogram(f'Parameters/{name}', param, episode)
-                    if param.grad is not None:
-                        writer.add_histogram(f'Gradients/{name}', param.grad, episode)
-                
-                # 早期停止の判定
                 if episode >= min_episodes:
                     if avg_reward > best_avg_reward + min_delta:
                         best_avg_reward = avg_reward
                         patience_counter = 0
                         save_models(user_simulator, agent, save_path='saved_models_best')
-                        writer.add_scalar('Milestone/Best_Model_Update', best_avg_reward, episode)
+                        print(f"✓ 新ベストモデル保存: {best_avg_reward:.2f}")
                     else:
                         patience_counter += 1
                 elif avg_reward > best_avg_reward:
                     best_avg_reward = avg_reward
                 
-                memory_size = len(agent.memory)
-                print(f"Episode {episode + 1}, "
-                      f"Total Reward: {total_reward:.4f}, "
-                      f"Average Reward: {avg_reward:.4f}, "
-                      f"Loss: {total_loss/session_length:.4f}, "
-                      f"Epsilon: {epsilon:.4f}, "
-                      f"LR: {agent.optimizer.param_groups[0]['lr']:.6f}, "
-                      f"Memory: {memory_size}/{MEMORY_SIZE}")
+                print(f"Ep {episode + 1:3d}, "
+                      f"Total: {total_reward:6.2f}, "
+                      f"Avg: {avg_reward:6.2f}, "
+                      f"Loss: {total_loss/session_length:5.3f}, "
+                      f"ε: {epsilon:.3f}, "
+                      f"Resp: {avg_response:.3f}")
 
                 if (episode + 1) % 50 == 0:
                     save_models(user_simulator, agent)
-                    writer.add_text('Checkpoint', f'Model saved at episode {episode + 1}', episode)
 
                 if patience_counter >= patience:
-                    print(f"\n早期停止: {patience}エピソード連続で改善が見られませんでした")
-                    print(f"最良の平均報酬: {best_avg_reward:.4f}")
-                    save_models(user_simulator, agent, save_path='saved_models_best')
-                    writer.add_text('Training', 
-                                  f'Early stopping at episode {episode + 1}. Best reward: {best_avg_reward:.4f}', 
-                                  episode)
+                    print(f"\n早期停止 (最良: {best_avg_reward:.4f})")
+                    save_models(user_simulator, agent, save_path='saved_models_final')
                     writer.close()
                     return
 
                 break
     
     writer.close()
-    print(f"\nTrening completed. TensorBoard logs saved to: {log_dir}")
-    print(f"View results with: tensorboard --logdir=runs")
+    print(f"\n学習完了! Logs: {log_dir}")
 
 if __name__ == "__main__":
     main()
