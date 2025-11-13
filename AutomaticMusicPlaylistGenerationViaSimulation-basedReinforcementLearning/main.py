@@ -17,15 +17,13 @@ MEMORY_SIZE = 100000
 UPDATE_TARGET_FREQ = 500
 LSTM_HIDDEN_SIZE = [256, 128, 64]
 
-# Device configuration
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Experience tuple structure
 Experience = namedtuple('Experience', ['state', 'action', 'action_features', 'reward', 'next_state', 'done'])
 
 class DeterministicUserSimulator:
     """決定論的ルールベースのシミュレータ（ベースライン）"""
-    def __init__(self, track_pool_size=1000):
+    def __init__(self, track_pool_size=256):
         np.random.seed(42)
         self.track_preferences = np.random.rand(track_pool_size) * 0.4 + 0.6
         self.track_genres = np.random.randint(0, 10, track_pool_size)
@@ -58,7 +56,7 @@ class DeterministicUserSimulator:
         return np.clip(base_response, 0.0, 1.0)
 
 class LSTMUserSimulator(nn.Module):
-    """軽量版LSTMシミュレータ"""
+    """軽量版LSTMシミュレータ - データ拡張版"""
     def __init__(self, input_size, hidden_sizes=LSTM_HIDDEN_SIZE):
         super(LSTMUserSimulator, self).__init__()
         self.hidden_sizes = hidden_sizes
@@ -67,10 +65,11 @@ class LSTMUserSimulator(nn.Module):
         self.lstm2 = nn.LSTM(hidden_sizes[0], hidden_sizes[1], batch_first=True)
         self.lstm3 = nn.LSTM(hidden_sizes[1], hidden_sizes[2], batch_first=True)
         
+        # Dropoutを調整し汎化性能を向上
         self.output_layer = nn.Sequential(
             nn.Linear(hidden_sizes[2], 32),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.4),  # 0.3 -> 0.4に増加
             nn.Linear(32, 1),
             nn.Sigmoid()
         )
@@ -83,14 +82,15 @@ class LSTMUserSimulator(nn.Module):
         completion_prob = self.output_layer(out3)
         return completion_prob, (hidden1, hidden2, hidden3)
 
-def generate_expert_trajectories(deterministic_sim, n_trajectories=2000, session_length=20):
-    """決定論的シミュレータで高品質な軌跡を生成"""
+def generate_expert_trajectories(deterministic_sim, n_trajectories=2000, session_length=20, 
+                                 add_exploration=True):
+    """決定論的シミュレータで高品質な軌跡を生成 + データ拡張"""
     print("=" * 60)
     print("高品質な学習データを生成中...")
     print("=" * 60)
     
     trajectories = []
-    track_pool_size = 1000
+    track_pool_size = 256
     
     for traj_idx in range(n_trajectories):
         deterministic_sim.reset_user_state()
@@ -98,28 +98,38 @@ def generate_expert_trajectories(deterministic_sim, n_trajectories=2000, session
         track_history = []
         response_history = []
         
+        # 探索率を追加（データ多様性の向上）
+        exploration_rate = 0.1 if add_exploration else 0.0
+        
         for step in range(session_length):
             current_state = track_history + [0.0] * (20 - len(track_history))
             current_state += response_history + [0.0] * (20 - len(response_history))
             
-            candidates = np.random.choice(track_pool_size, size=50, replace=False)
-            best_action = None
-            best_response = -1
-            
-            for candidate in candidates:
-                if candidate not in track_history:
-                    temp_response = deterministic_sim.get_response(
-                        current_state, candidate, step
+            # 探索: 10%の確率でランダム選択
+            if add_exploration and np.random.random() < exploration_rate:
+                available_tracks = [t for t in range(track_pool_size) if t not in track_history]
+                best_action = np.random.choice(available_tracks)
+                best_response = deterministic_sim.get_response(current_state, best_action, step)
+            else:
+                # Exploitation: 最良の行動を選択
+                candidates = np.random.choice(track_pool_size, size=50, replace=False)
+                best_action = None
+                best_response = -1
+                
+                for candidate in candidates:
+                    if candidate not in track_history:
+                        temp_response = deterministic_sim.get_response(
+                            current_state, candidate, step
+                        )
+                        if temp_response > best_response:
+                            best_response = temp_response
+                            best_action = candidate
+                
+                if best_action is None:
+                    best_action = np.random.randint(0, track_pool_size)
+                    best_response = deterministic_sim.get_response(
+                        current_state, best_action, step
                     )
-                    if temp_response > best_response:
-                        best_response = temp_response
-                        best_action = candidate
-            
-            if best_action is None:
-                best_action = np.random.randint(0, track_pool_size)
-                best_response = deterministic_sim.get_response(
-                    current_state, best_action, step
-                )
             
             state_with_action = current_state + [float(best_action)]
             trajectories.append((state_with_action, best_response))
@@ -137,10 +147,11 @@ def generate_expert_trajectories(deterministic_sim, n_trajectories=2000, session
     return trajectories
 
 def pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=20, batch_size=64):
-    """専門家データでLSTMを事前学習"""
+    """専門家データでLSTMを事前学習 - L2正則化追加"""
     print("\nLSTMシミュレータの事前学習開始...")
     
-    optimizer = optim.Adam(lstm_sim.parameters(), lr=0.001)
+    # Weight decay追加で過学習を防止
+    optimizer = optim.Adam(lstm_sim.parameters(), lr=0.001, weight_decay=1e-5)
     criterion = nn.BCELoss()
     
     for epoch in range(n_epochs):
@@ -169,11 +180,10 @@ def pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=20, batch_si
     print(f"事前学習完了! 最終Loss: {avg_loss:.4f}\n")
 
 class DuelingActionHeadDQN(nn.Module):
-    """【優先度中】Dueling Architecture + Action Head DQN"""
+    """Dueling Architecture + Action Head DQN"""
     def __init__(self, state_dim, action_feature_dim):
         super(DuelingActionHeadDQN, self).__init__()
         
-        # 共通の状態エンコーダ
         self.state_net = nn.Sequential(
             nn.Linear(state_dim, 256),
             nn.ReLU(),
@@ -182,7 +192,6 @@ class DuelingActionHeadDQN(nn.Module):
             nn.ReLU()
         )
         
-        # アクション特徴エンコーダ
         self.action_net = nn.Sequential(
             nn.Linear(action_feature_dim, 128),
             nn.ReLU(),
@@ -191,14 +200,12 @@ class DuelingActionHeadDQN(nn.Module):
             nn.ReLU()
         )
         
-        # Dueling: 状態価値V(s)
         self.value_stream = nn.Sequential(
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 1)
         )
         
-        # Dueling: 行動優位性A(s,a)
         self.advantage_stream = nn.Sequential(
             nn.Linear(128 + 64, 64),
             nn.ReLU(),
@@ -225,17 +232,13 @@ class DuelingActionHeadDQN(nn.Module):
         
         state_features_expanded = state_features.unsqueeze(1).expand(-1, action_features.size(1), -1)
         
-        # 状態価値V(s)を計算 - 修正版
-        value = self.value_stream(state_features)  # [batch_size, 1]
-        # 正しく次元を調整
+        value = self.value_stream(state_features)
         num_actions = action_features.size(1)
-        value = value.expand(-1, num_actions)  # [batch_size, num_actions]
+        value = value.expand(-1, num_actions)
         
-        # 行動優位性A(s,a)を計算
         combined = torch.cat([state_features_expanded, action_features_processed], dim=-1)
         advantage = self.advantage_stream(combined.view(-1, combined.size(-1))).view(batch_size, -1)
         
-        # Q(s,a) = V(s) + (A(s,a) - mean(A(s,a)))
         q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
         
         return q_values
@@ -261,7 +264,7 @@ class ReplayBuffer:
         return len(self.buffer)
 
 class MusicEnvironment:
-    def __init__(self, user_simulator, track_pool_size=1000, session_length=20, state_dim=40):
+    def __init__(self, user_simulator, track_pool_size=256, session_length=20, state_dim=40):
         self.user_simulator = user_simulator
         self.track_pool_size = track_pool_size
         self.session_length = session_length
@@ -309,17 +312,13 @@ class MusicEnvironment:
         return self.track_history + self.response_history
 
 class DoubleDQNAgent:
-    """【優先度中】Double DQN + Dueling DQN 実装"""
+    """Double DQN + Dueling DQN 実装"""
     def __init__(self, state_dim, action_feature_dim, use_dueling=True):
         self.use_dueling = use_dueling
         
         if use_dueling:
             self.policy_net = DuelingActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
             self.target_net = DuelingActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
-        else:
-            from main_paperMD_hybrid import ActionHeadDQN
-            self.policy_net = ActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
-            self.target_net = ActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
         
         self.target_net.load_state_dict(self.policy_net.state_dict())
         
@@ -349,7 +348,7 @@ class DoubleDQNAgent:
             return random.randrange(action_features.size(0))
 
     def train_step(self):
-        """【優先度中】Double DQN学習ステップ"""
+        """Double DQN学習ステップ"""
         if len(self.memory) < BATCH_SIZE:
             return 0.0
         
@@ -361,15 +360,12 @@ class DoubleDQNAgent:
         next_states = next_states.to(DEVICE)
         dones = dones.to(DEVICE)
         
-        # 現在のQ値を計算
         current_q = self.policy_net(states, action_features).squeeze(1)
         
         with torch.no_grad():
-            # Double DQN: policy_netで次の行動を選択
             next_q_policy = self.policy_net(next_states, action_features)
             next_actions = next_q_policy.argmax(dim=1, keepdim=True)
             
-            # target_netでその行動のQ値を評価
             next_q_target = self.target_net(next_states, action_features)
             next_q = next_q_target.gather(1, next_actions).squeeze(1)
             
@@ -392,13 +388,17 @@ class DoubleDQNAgent:
             self.target_net.load_state_dict(self.policy_net.state_dict())
             print(f"  → ターゲットネットワーク更新 (Episode {self.episodes_done})")
     
-    def save_model(self, save_dir, metrics):
-        """【実装1】モデルと学習メトリクスを保存"""
+    def save_model(self, save_dir, metrics, action_features):
+        """【重要】Action Featuresも保存"""
         os.makedirs(save_dir, exist_ok=True)
         
         # モデルの重みを保存
         model_path = os.path.join(save_dir, 'policy_net.pth')
         torch.save(self.policy_net.state_dict(), model_path)
+        
+        # Action Featuresを保存（推論時に同じものを使用）
+        action_features_path = os.path.join(save_dir, 'action_features.pth')
+        torch.save(action_features, action_features_path)
         
         # メトリクスをJSON形式で保存
         metrics_path = os.path.join(save_dir, 'metrics.json')
@@ -406,6 +406,7 @@ class DoubleDQNAgent:
             json.dump(metrics, f, indent=2)
         
         print(f"\nモデルを保存: {model_path}")
+        print(f"Action Featuresを保存: {action_features_path}")
         print(f"メトリクスを保存: {metrics_path}")
     
     def load_model(self, model_path):
@@ -415,7 +416,7 @@ class DoubleDQNAgent:
         print(f" モデルを読み込み: {model_path}")
 
 def evaluate_agent(agent, env, cached_action_features, n_episodes=50):
-    """【実装1】エージェントを評価（テストモード）"""
+    """エージェントを評価（テストモード）"""
     print("\n" + "=" * 60)
     print("エージェント評価開始（テストセット）")
     print("=" * 60)
@@ -429,23 +430,19 @@ def evaluate_agent(agent, env, cached_action_features, n_episodes=50):
         episode_reward = 0
         
         for step in range(env.session_length):
-            # ε=0で完全に貪欲選択
             action = agent.select_action(state, cached_action_features, epsilon=0.0)
             next_state, reward, done = env.step(action)
             
             episode_reward += reward
             state = next_state
         
-        # 統計を収集
         total_rewards.append(episode_reward)
         avg_responses.append(np.mean(env.response_history))
         
-        # 重複率を計算
         unique_tracks = len(set([t for t in env.track_history if t > 0]))
         duplicate_rate = 1.0 - (unique_tracks / env.session_length)
         duplicate_rates.append(duplicate_rate)
     
-    # 結果をまとめる
     results = {
         'avg_reward': np.mean(total_rewards),
         'std_reward': np.std(total_rewards),
@@ -478,21 +475,25 @@ def main():
     print("  1. Double DQN (Q値過大評価を防止)")
     print("  2. Dueling DQN (状態価値と行動優位性を分離)")
     print("  3. モデル保存・読み込み機能")
-    print("  4. テストセットでの評価機能")
+    print("  4. Action Features保存（推論時の一貫性確保）")
     print("=" * 60 + "\n")
     
     state_dim = 40
     action_feature_dim = 64
-    track_pool_size = 1000
+    track_pool_size = 265  # 実際のCSVのトラック数に合わせる
     session_length = 20
     
-    # Step 1: 決定論的シミュレータで高品質データ生成
+    # Step 1: 決定論的シミュレータで高品質データ生成（探索追加）
     det_sim = DeterministicUserSimulator(track_pool_size)
-    trajectories = generate_expert_trajectories(det_sim, n_trajectories=2000)
+    trajectories = generate_expert_trajectories(det_sim, n_trajectories=2000, add_exploration=True)
     
-    # Step 2: LSTMを事前学習
+    # Step 2: LSTMを事前学習（正則化強化）
     lstm_sim = LSTMUserSimulator(state_dim + 1).to(DEVICE)
     pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=20)
+    
+    # LSTMシミュレータも保存
+    os.makedirs(save_dir, exist_ok=True)
+    torch.save(lstm_sim.state_dict(), os.path.join(save_dir, 'user_simulator.pth'))
     
     # Step 3: Double DQN + Dueling DQN学習
     env = MusicEnvironment(lstm_sim, track_pool_size, session_length, state_dim)
@@ -505,6 +506,9 @@ def main():
     
     best_avg_reward = float('-inf')
     rewards_history = []
+    
+    # 【重要】Action Featuresを固定（シード固定で再現性確保）
+    torch.manual_seed(42)
     cached_action_features = torch.randn(track_pool_size, action_feature_dim, device=DEVICE)
     
     print("\n" + "=" * 60)
@@ -549,7 +553,6 @@ def main():
     
     writer.close()
     
-    # 【実装1】学習完了後の評価とモデル保存
     print(f"\n学習完了! 最良平均報酬: {best_avg_reward:.2f}")
     
     # テストセットで評価
@@ -571,12 +574,13 @@ def main():
             'epsilon_start': epsilon_start,
             'epsilon_end': epsilon_end,
             'epsilon_decay': epsilon_decay,
-            'update_target_freq': UPDATE_TARGET_FREQ
+            'update_target_freq': UPDATE_TARGET_FREQ,
+            'action_features_seed': 42  # 重要！
         }
     }
     
-    # モデルとメトリクスを保存
-    agent.save_model(save_dir, training_metrics)
+    # モデル・Action Features・メトリクスを保存
+    agent.save_model(save_dir, training_metrics, cached_action_features)
     
     print(f"\n すべての処理が完了しました！")
     print(f" 保存ディレクトリ: {save_dir}")

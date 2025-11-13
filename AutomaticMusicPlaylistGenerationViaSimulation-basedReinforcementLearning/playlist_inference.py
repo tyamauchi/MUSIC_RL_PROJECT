@@ -6,11 +6,7 @@ import json
 import os
 from datetime import datetime
 
-# デバイスの設定
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# ===== モデルクラスの定義 =====
-# （学習時と同じ定義が必要）
 
 LSTM_HIDDEN_SIZE = [256, 128, 64]
 
@@ -27,7 +23,7 @@ class LSTMUserSimulator(nn.Module):
         self.output_layer = nn.Sequential(
             nn.Linear(hidden_sizes[2], 32),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(0.4),
             nn.Linear(32, 1),
             nn.Sigmoid()
         )
@@ -153,10 +149,8 @@ class MusicEnvironment:
     def _get_state(self):
         return self.track_history + self.response_history
 
-# ===== ユーティリティ関数 =====
-
 def load_track_info(file_path=None):
-    """トラック情報の読み込み"""
+    """トラック情報の読み込み（カラム名の自動検出）"""
     possible_paths = [
         'data/tracks.csv',
         'tracks.csv',
@@ -171,35 +165,95 @@ def load_track_info(file_path=None):
         try:
             print(f" トラック情報を {path} から読み込み試行中...")
             tracks_df = pd.read_csv(path)
-            track_titles = dict(zip(tracks_df['track_id'], tracks_df['title']))
-            print(f" 成功: {len(track_titles)} 件のトラック情報を読み込みました\n")
+            
+            # カラム名を確認
+            print(f" カラム名: {list(tracks_df.columns)}")
+            
+            # track_idカラムの検出
+            track_id_col = None
+            for col in ['track_id', 'id', 'trackId', 'track_no']:
+                if col in tracks_df.columns:
+                    track_id_col = col
+                    break
+            
+            if track_id_col is None:
+                print(f" ⚠️ track_id カラムが見つかりません。最初のカラムを使用します")
+                track_id_col = tracks_df.columns[0]
+            
+            # titleカラムの検出
+            title_col = None
+            for col in ['title', 'name', 'track_name', 'song_name', 'song']:
+                if col in tracks_df.columns:
+                    title_col = col
+                    break
+            
+            if title_col is None:
+                print(f" ⚠️ title カラムが見つかりません")
+                # track_idをそのまま表示
+                track_titles = {int(tid): f"Track {tid}" for tid in tracks_df[track_id_col]}
+            else:
+                # 正常にタイトルを読み込み
+                track_titles = {}
+                for _, row in tracks_df.iterrows():
+                    tid = int(row[track_id_col])
+                    title = row[title_col]
+                    # NaNや空文字列の処理
+                    if pd.isna(title) or str(title).strip() == '':
+                        track_titles[tid] = f"Track {tid}"
+                    else:
+                        track_titles[tid] = str(title)
+            
+            print(f" 成功: {len(track_titles)} 件のトラック情報を読み込みました")
+            print(f"   使用カラム: track_id={track_id_col}, title={title_col}")
+            
+            # サンプル表示
+            print(f"\n サンプル（最初の5件）:")
+            for i, (tid, title) in enumerate(list(track_titles.items())[:5]):
+                print(f"   ID {tid:4d}: {title}")
+            print()
+            
             return track_titles, tracks_df
+            
         except FileNotFoundError:
             continue
         except Exception as e:
             print(f"  エラー: {e}")
+            import traceback
+            traceback.print_exc()
             continue
     
-    print(" 警告: トラック情報ファイルが見つかりません。トラックIDのみ表示します。")
-    return {}, None
+    print(" ⚠️ トラック情報ファイルが見つかりません。ダミーデータを使用します。")
+    # ダミーデータを生成
+    dummy_titles = {i: f"Track {i}" for i in range(1000)}
+    return dummy_titles, None
 
 def load_models(model_path, state_dim=40, action_feature_dim=64):
-    """学習済みモデルの読み込み"""
+    """学習済みモデルの読み込み（Action Features含む）"""
     print(f"📂 モデルを {model_path} から読み込み中...")
     
     # DQNモデルの読み込み
     policy_net = DuelingActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
     policy_net.load_state_dict(torch.load(f'{model_path}/policy_net.pth', map_location=DEVICE))
     policy_net.eval()
-    print("DQNモデルを読み込みました")
+    print("✅ DQNモデルを読み込みました")
 
-    # User Simulatorの読み込み（オプション）
+    # Action Featuresの読み込み
+    action_features = None
+    try:
+        action_features = torch.load(f'{model_path}/action_features.pth', map_location=DEVICE)
+        print(f"✅ Action Features を読み込みました (shape: {action_features.shape})")
+    except FileNotFoundError:
+        print("⚠️  Action Features が見つかりません。ランダムに初期化します。")
+        torch.manual_seed(42)
+        action_features = torch.randn(1000, action_feature_dim, device=DEVICE)
+
+    # User Simulatorの読み込み
     user_simulator = None
     try:
         user_simulator = LSTMUserSimulator(state_dim + 1).to(DEVICE)
         user_simulator.load_state_dict(torch.load(f'{model_path}/user_simulator.pth', map_location=DEVICE))
         user_simulator.eval()
-        print("User Simulatorを読み込みました")
+        print("✅ User Simulatorを読み込みました")
     except FileNotFoundError:
         print("⚠️  User Simulatorが見つかりません（オプション）")
     
@@ -207,36 +261,31 @@ def load_models(model_path, state_dim=40, action_feature_dim=64):
     try:
         with open(f'{model_path}/metrics.json', 'r') as f:
             metrics = json.load(f)
-        print(f"メトリクスを読み込みました")
+        print(f"✅ メトリクスを読み込みました")
         print(f"   - アーキテクチャ: {metrics.get('architecture', 'N/A')}")
         print(f"   - 最良報酬: {metrics.get('best_avg_reward', 'N/A'):.2f}")
-        print(f"   - テスト応答率: {metrics['test_results'].get('avg_response', 'N/A'):.3f}")
+        if 'test_results' in metrics:
+            print(f"   - テスト応答率: {metrics['test_results'].get('avg_response', 'N/A'):.3f}")
     except FileNotFoundError:
         metrics = None
         print("⚠️  メトリクスファイルが見つかりません")
+    except Exception as e:
+        metrics = None
+        print(f"⚠️  メトリクス読み込みエラー: {e}")
     
     print()
-    return policy_net, user_simulator, metrics
+    return policy_net, user_simulator, metrics, action_features
 
-def generate_playlist(policy_net, user_simulator, track_pool_size=1000, session_length=20, 
-                     state_dim=40, action_feature_dim=64, temperature=0.3, seed=None):
-    """プレイリストの生成
-    
-    Args:
-        temperature: 生成の多様性 (0.1=決定論的, 1.0=ランダム的)
-        seed: 再現性のためのランダムシード
-    """
+def generate_playlist(policy_net, user_simulator, action_features, 
+                     track_pool_size=1000, session_length=20, 
+                     state_dim=40, temperature=0.3, seed=None):
+    """プレイリストの生成"""
     if seed is not None:
         torch.manual_seed(seed)
         np.random.seed(seed)
     
     env = MusicEnvironment(user_simulator, track_pool_size, session_length, state_dim)
     state = env.reset()
-    
-    # アクション特徴量の生成（学習時と同じシードで再現可能）
-    if seed is not None:
-        torch.manual_seed(seed + 1)
-    action_features = torch.randn(track_pool_size, action_feature_dim, device=DEVICE)
     
     playlist = []
     responses = []
@@ -256,7 +305,7 @@ def generate_playlist(policy_net, user_simulator, track_pool_size=1000, session_
             penalties = torch.zeros_like(q_values)
             for i in range(action_features.size(0)):
                 if i in track_history:
-                    penalties[0, i] = -1e10  # 大きな負の値で除外
+                    penalties[0, i] = -1e10
             
             q_values_adjusted = q_values + penalties
             
@@ -266,7 +315,6 @@ def generate_playlist(policy_net, user_simulator, track_pool_size=1000, session_
                 probs = torch.softmax(q_values_scaled, dim=1)
                 action = torch.multinomial(probs[0], 1).item()
             else:
-                # temperature=0は完全に貪欲
                 action = torch.argmax(q_values_adjusted).item()
             
             # 環境でステップ実行
@@ -324,19 +372,28 @@ def analyze_playlist(result, track_titles=None, tracks_df=None, save_path=None):
         zip(result['playlist'], result['responses'], result['q_values']), 1
     ):
         # トラック情報の取得
-        if track_titles:
-            title = track_titles.get(track_id, "タイトル不明")
+        if track_titles and track_id in track_titles:
+            title = track_titles[track_id]
         else:
-            title = "タイトル不明"
+            title = f"Track {track_id}"
         
-        # 追加情報（アーティストなど）
+        # 追加情報
         extra_info = ""
         if tracks_df is not None:
-            track_row = tracks_df[tracks_df['track_id'] == track_id]
-            if not track_row.empty:
-                if 'artist' in track_row.columns:
-                    artist = track_row['artist'].values[0]
-                    extra_info = f" - {artist}"
+            # track_idカラムの検出
+            id_col = None
+            for col in ['track_id', 'id', 'trackId']:
+                if col in tracks_df.columns:
+                    id_col = col
+                    break
+            
+            if id_col:
+                track_row = tracks_df[tracks_df[id_col] == track_id]
+                if not track_row.empty:
+                    if 'artist' in track_row.columns:
+                        artist = track_row['artist'].values[0]
+                        if pd.notna(artist) and str(artist).strip():
+                            extra_info = f" - {artist}"
         
         # 応答スコアによる評価マーク
         if response > 0.95:
@@ -360,6 +417,7 @@ def analyze_playlist(result, track_titles=None, tracks_df=None, save_path=None):
             json.dump({
                 'playlist': result['playlist'],
                 'responses': result['responses'],
+                'q_values': result['q_values'],
                 'statistics': {
                     'total_reward': result['total_reward'],
                     'average_response': result['average_response'],
@@ -368,7 +426,8 @@ def analyze_playlist(result, track_titles=None, tracks_df=None, save_path=None):
             }, f, indent=2, ensure_ascii=False)
         print(f"\n💾 プレイリストを保存: {save_path}")
 
-def generate_multiple_playlists(policy_net, user_simulator, n_playlists=5, **kwargs):
+def generate_multiple_playlists(policy_net, user_simulator, action_features, 
+                                n_playlists=5, **kwargs):
     """複数のプレイリストを生成して比較"""
     print(f"\n🔄 {n_playlists}個のプレイリストを生成中...\n")
     
@@ -376,8 +435,8 @@ def generate_multiple_playlists(policy_net, user_simulator, n_playlists=5, **kwa
     for i in range(n_playlists):
         print(f"プレイリスト {i+1}/{n_playlists} 生成中...")
         result = generate_playlist(
-            policy_net, user_simulator, 
-            seed=42 + i,  # 異なるシードで多様性を確保
+            policy_net, user_simulator, action_features,
+            seed=42 + i,
             **kwargs
         )
         results.append(result)
@@ -401,32 +460,36 @@ def main():
     print("=" * 80 + "\n")
     
     # パラメータ設定
-    model_path = 'saved_models/20251111_102904'  # 学習済みモデルのパス
+    model_path = 'saved_models/20251113_100051'  # 新しく学習したモデル
     state_dim = 40
     action_feature_dim = 64
-    track_pool_size = 1000
+    track_pool_size = 265  # 実際のCSVのトラック数に合わせる
     session_length = 20
-    temperature = 0.3  # 0.1=決定論的, 1.0=多様性重視
-    n_playlists = 3    # 生成するプレイリスト数
+    temperature = 0.3
+    n_playlists = 3
     
-    # トラック情報の読み込み
+    # トラック情報の読み込み（自動検出）
     track_titles, tracks_df = load_track_info()
     
     try:
-        # モデルの読み込み
-        policy_net, user_simulator, metrics = load_models(
+        # モデルとAction Featuresの読み込み
+        policy_net, user_simulator, metrics, action_features = load_models(
             model_path, state_dim, action_feature_dim
         )
+        
+        if action_features is None:
+            print("⚠️  Action Featuresが見つからないため、推論精度が低下する可能性があります")
+            return
         
         # 複数のプレイリストを生成
         results, best_idx = generate_multiple_playlists(
             policy_net,
             user_simulator,
+            action_features,
             n_playlists=n_playlists,
             track_pool_size=track_pool_size,
             session_length=session_length,
             state_dim=state_dim,
-            action_feature_dim=action_feature_dim,
             temperature=temperature
         )
         
@@ -439,9 +502,10 @@ def main():
         )
         
     except FileNotFoundError as e:
-        print(f"\n エラー: {e}")
+        print(f"\n❌ エラー: {e}")
         print("\n必要なファイル:")
         print(f"  - {model_path}/policy_net.pth")
+        print(f"  - {model_path}/action_features.pth (必須)")
         print(f"  - {model_path}/user_simulator.pth (オプション)")
         print(f"  - {model_path}/metrics.json (オプション)")
 
