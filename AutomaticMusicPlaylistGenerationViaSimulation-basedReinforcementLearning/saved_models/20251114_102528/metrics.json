@@ -1,0 +1,27 @@
+{
+  "timestamp": "20251114_102528",
+  "architecture": "Double DQN + Dueling DQN",
+  "n_episodes": 300,
+  "best_avg_reward": 21.33651775121689,
+  "final_avg_reward": 21.15702486991882,
+  "final_avg_response": 0.9638255327939987,
+  "test_results": {
+    "avg_reward": 21.311518020629883,
+    "std_reward": 0.034520370764625774,
+    "avg_response": 0.9655759010314943,
+    "std_response": 0.0017260185382312867,
+    "avg_duplicate_rate": 0.0,
+    "min_reward": 21.235744774341583,
+    "max_reward": 21.37324547767639
+  },
+  "hyperparameters": {
+    "batch_size": 64,
+    "gamma": 0.995,
+    "learning_rate": 0.0002,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.1,
+    "epsilon_decay": 0.998,
+    "update_target_freq": 500,
+    "action_features_seed": 42
+  }
+}

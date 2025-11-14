@@ -229,21 +229,21 @@ def load_track_info(file_path=None):
 
 def load_models(model_path, state_dim=40, action_feature_dim=64):
     """学習済みモデルの読み込み（Action Features含む）"""
-    print(f"📂 モデルを {model_path} から読み込み中...")
+    print(f" モデルを {model_path} から読み込み中...")
     
     # DQNモデルの読み込み
     policy_net = DuelingActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
     policy_net.load_state_dict(torch.load(f'{model_path}/policy_net.pth', map_location=DEVICE))
     policy_net.eval()
-    print("✅ DQNモデルを読み込みました")
+    print(" DQNモデルを読み込みました")
 
     # Action Featuresの読み込み
     action_features = None
     try:
         action_features = torch.load(f'{model_path}/action_features.pth', map_location=DEVICE)
-        print(f"✅ Action Features を読み込みました (shape: {action_features.shape})")
+        print(f" Action Features を読み込みました (shape: {action_features.shape})")
     except FileNotFoundError:
-        print("⚠️  Action Features が見つかりません。ランダムに初期化します。")
+        print("  Action Features が見つかりません。ランダムに初期化します。")
         torch.manual_seed(42)
         action_features = torch.randn(1000, action_feature_dim, device=DEVICE)
 
@@ -253,25 +253,25 @@ def load_models(model_path, state_dim=40, action_feature_dim=64):
         user_simulator = LSTMUserSimulator(state_dim + 1).to(DEVICE)
         user_simulator.load_state_dict(torch.load(f'{model_path}/user_simulator.pth', map_location=DEVICE))
         user_simulator.eval()
-        print("✅ User Simulatorを読み込みました")
+        print(" User Simulatorを読み込みました")
     except FileNotFoundError:
-        print("⚠️  User Simulatorが見つかりません（オプション）")
+        print("  User Simulatorが見つかりません（オプション）")
     
     # メトリクスの読み込み
     try:
         with open(f'{model_path}/metrics.json', 'r') as f:
             metrics = json.load(f)
-        print(f"✅ メトリクスを読み込みました")
+        print(f" メトリクスを読み込みました")
         print(f"   - アーキテクチャ: {metrics.get('architecture', 'N/A')}")
         print(f"   - 最良報酬: {metrics.get('best_avg_reward', 'N/A'):.2f}")
         if 'test_results' in metrics:
             print(f"   - テスト応答率: {metrics['test_results'].get('avg_response', 'N/A'):.3f}")
     except FileNotFoundError:
         metrics = None
-        print("⚠️  メトリクスファイルが見つかりません")
+        print("  メトリクスファイルが見つかりません")
     except Exception as e:
         metrics = None
-        print(f"⚠️  メトリクス読み込みエラー: {e}")
+        print(f"  メトリクス読み込みエラー: {e}")
     
     print()
     return policy_net, user_simulator, metrics, action_features
@@ -442,7 +442,7 @@ def generate_multiple_playlists(policy_net, user_simulator, action_features,
         results.append(result)
     
     # 比較統計
-    print("\n📊 生成されたプレイリストの比較:")
+    print("\n 生成されたプレイリストの比較:")
     print("-" * 60)
     for i, result in enumerate(results, 1):
         print(f"プレイリスト {i}: 平均応答 {result['average_response']:.3f} "
@@ -478,7 +478,7 @@ def main():
         )
         
         if action_features is None:
-            print("⚠️  Action Featuresが見つからないため、推論精度が低下する可能性があります")
+            print("  Action Featuresが見つからないため、推論精度が低下する可能性があります")
             return
         
         # 複数のプレイリストを生成
@@ -502,7 +502,7 @@ def main():
         )
         
     except FileNotFoundError as e:
-        print(f"\n❌ エラー: {e}")
+        print(f"\n エラー: {e}")
         print("\n必要なファイル:")
         print(f"  - {model_path}/policy_net.pth")
         print(f"  - {model_path}/action_features.pth (必須)")
