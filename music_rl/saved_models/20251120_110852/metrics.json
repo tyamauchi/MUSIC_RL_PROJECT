@@ -1,0 +1,12 @@
+{
+  "best_avg_reward": 21.40687991976738,
+  "test_results": {
+    "avg_reward": 21.410027890205384,
+    "std_reward": 0.028873937995414732,
+    "avg_response": 0.9705013945102692,
+    "std_response": 0.00144369689977074,
+    "avg_duplicate_rate": 0.0,
+    "min_reward": 21.31358700990677,
+    "max_reward": 21.46945494413376
+  }
+}
