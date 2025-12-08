@@ -22,3 +22,7 @@ python main.py
 - environment/ - 環境
 - memory/ - リプレイバッファ
 - utils/ - ユーティリティ関数
+
+## データセット 
+
+- data/hetrec2011-lastfm-2k（main.py USE_REAL_LASTFM_DATA=Trueにすると学習データを生成する。)

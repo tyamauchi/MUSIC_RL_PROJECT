@@ -72,8 +72,12 @@ def pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=20, batch_si
         
         for i in range(0, len(trajectories) - batch_size, batch_size):
             batch = trajectories[i:i+batch_size]
-            states = torch.FloatTensor([t[0] for t in batch]).unsqueeze(1).to(DEVICE)
-            targets = torch.FloatTensor([t[1] for t in batch]).unsqueeze(1).unsqueeze(2).to(DEVICE)
+            # Convert lists of numpy arrays to a single numpy array first (faster)
+            states_np = np.array([t[0] for t in batch], dtype=np.float32)
+            targets_np = np.array([t[1] for t in batch], dtype=np.float32)
+
+            states = torch.from_numpy(states_np).float().unsqueeze(1).to(DEVICE)
+            targets = torch.from_numpy(targets_np).float().unsqueeze(1).unsqueeze(2).to(DEVICE)
             
             outputs, _ = lstm_sim(states)
             loss = criterion(outputs, targets)

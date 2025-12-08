@@ -13,6 +13,14 @@ from utils.training import generate_expert_trajectories, pretrain_lstm_with_expe
 from utils.evaluation import evaluate_agent
 
 
+# ======================================================
+#  モード切り替えフラグ
+# ======================================================
+
+USE_REAL_LASTFM_DATA = False  # ← True: Last.fm 実データ / False: det_sim データ
+LASTFM_TRAJ_PATH = "./data/trajectories_lastfm.npy"
+
+
 def main():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_dir = f'runs/music_rl_{timestamp}'
@@ -21,18 +29,47 @@ def main():
     
     print("\n" + "=" * 60)
     print("Double DQN + Dueling DQN 音楽推薦システム")
+    print("Mode:", "REAL Last.fm Data" if USE_REAL_LASTFM_DATA else "Deterministic Simulator")
     print("=" * 60 + "\n")
     
-    det_sim = DeterministicUserSimulator(TRACK_POOL_SIZE)
-    trajectories = generate_expert_trajectories(det_sim, n_trajectories=N_TRAJECTORIES, 
-                                                session_length=SESSION_LENGTH, add_exploration=True)
-    
+
+    # ======================================================
+    #  Trajectory 生成 / 読み込み
+    # ======================================================
+    if USE_REAL_LASTFM_DATA:
+        print(">>> REAL Last.fm user data を使用します")
+        if not os.path.exists(LASTFM_TRAJ_PATH):
+            raise FileNotFoundError(f"{LASTFM_TRAJ_PATH} が見つかりません。先に Last.fm から生成してください。")
+        trajectories = np.load(LASTFM_TRAJ_PATH, allow_pickle=True)
+        print(f"Loaded {len(trajectories)} Last.fm trajectories")
+
+    else:
+        print(">>> DeterministicUserSimulator を使用します")
+        det_sim = DeterministicUserSimulator(TRACK_POOL_SIZE)
+        trajectories = generate_expert_trajectories(
+            det_sim,
+            n_trajectories=N_TRAJECTORIES,
+            session_length=SESSION_LENGTH,
+            add_exploration=True
+        )
+        print(f"Generated {len(trajectories)} trajectories (det_sim)")
+
+
+    # ======================================================
+    #  LSTM UserSimulator の Pretrain
+    # ======================================================
     lstm_sim = LSTMUserSimulator(STATE_DIM + 1).to(DEVICE)
+    print("\n--- LSTMUserSimulator PRETRAIN START ---\n")
     pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=PRETRAIN_EPOCHS)
+    print("\n--- LSTMUserSimulator PRETRAIN DONE ---\n")
     
     os.makedirs(save_dir, exist_ok=True)
     torch.save(lstm_sim.state_dict(), os.path.join(save_dir, 'user_simulator.pth'))
     
+
+    # ======================================================
+    #  RL Environment 構築
+    # ======================================================
     env = MusicEnvironment(lstm_sim, TRACK_POOL_SIZE, SESSION_LENGTH, STATE_DIM)
     agent = DoubleDQNAgent(STATE_DIM, ACTION_FEATURE_DIM, use_dueling=True)
     agent.memory = ReplayBuffer()
@@ -45,6 +82,10 @@ def main():
     
     print("学習開始\n")
     
+
+    # ======================================================
+    #  RL 学習ループ
+    # ======================================================
     for episode in range(N_EPISODES):
         state = env.reset()
         total_reward = 0
@@ -80,6 +121,10 @@ def main():
     
     writer.close()
     
+
+    # ======================================================
+    #  テスト + モデル保存
+    # ======================================================
     test_results = evaluate_agent(agent, env, cached_action_features, n_episodes=50)
     
     metrics = {
