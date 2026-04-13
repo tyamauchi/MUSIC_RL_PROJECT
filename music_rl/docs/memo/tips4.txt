@@ -1,0 +1,291 @@
+training.py
+
+def generate_expert_trajectories(deterministic_sim, n_trajectories=2000, session_length=20, add_exploration=True):
+    print("=" * 60)
+    print("高品質な学習データを生成中...")
+    print("=" * 60)
+    
+    trajectories = []
+    track_pool_size = 256
+    
+    for traj_idx in range(n_trajectories):
+        deterministic_sim.reset_user_state()
+        track_history = []
+        response_history = []
+        exploration_rate = 0.1 if add_exploration else 0.0
+        
+        for step in range(session_length):
+            current_state = track_history + [0.0] * (20 - len(track_history))
+            current_state += response_history + [0.0] * (20 - len(response_history))
+            
+            if add_exploration and np.random.random() < exploration_rate:
+                available_tracks = [t for t in range(track_pool_size) if t not in track_history]
+                best_action = np.random.choice(available_tracks)
+                best_response = deterministic_sim.get_response(current_state, best_action, step)
+            else:
+                candidates = np.random.choice(track_pool_size, size=50, replace=False)
+                best_action = None
+                best_response = -1
+                
+                for candidate in candidates:
+                    if candidate not in track_history:
+                        temp_response = deterministic_sim.get_response(current_state, candidate, step)
+                        if temp_response > best_response:
+                            best_response = temp_response
+                            best_action = candidate
+                
+                if best_action is None:
+                    best_action = np.random.randint(0, track_pool_size)
+                    best_response = deterministic_sim.get_response(current_state, best_action, step)
+            
+            state_with_action = current_state + [float(best_action)]
+            trajectories.append((state_with_action, best_response))
+            
+            track_history.append(best_action)
+            response_history.append(best_response)
+        
+        if (traj_idx + 1) % 500 == 0:
+            avg_quality = np.mean([t[1] for t in trajectories[-10000:]])
+            print(f"軌跡生成 {traj_idx + 1}/{n_trajectories}, 平均応答率: {avg_quality:.3f}")
+    
+    print("=" * 60)
+    print(f"合計 {len(trajectories)} ステップの学習データを生成")
+    print("=" * 60)
+    return trajectories
+
+| 引数                  | 意味                          |
+| ------------------- | ------------------              |
+| `deterministic_sim` | 専門家ユーザー（真の反応を返す関数） |
+| `n_trajectories`    | セッション数（ユーザー訪問回数）     |
+| `session_length`    | 1セッションあたりの推薦回数         |
+| `add_exploration`   | ランダム探索を混ぜるか              |
+
+1. 全体の処理フロー
+    ① 初期化
+        trajectories = []
+        track_pool_size = 256
+    
+        曲IDは 0〜255
+        出力データを格納するリスト
+    
+    ② 各トラジェクトリ（1ユーザーセッション）
+        for traj_idx in range(n_trajectories):      ユーザー嗜好をリセット
+            deterministic_sim.reset_user_state()    毎回「別ユーザー」を想定       
+            track_history = []                      過去に出した曲
+            response_history = []                   その反応履歴
+            exploration_rate = 0.1                  10%は探索行動
+            
+    ③ 各ステップ（1推薦）
+            for step in range(session_length):
+                current_state = track_history + [0.0] * (20 - len(track_history))
+                current_state += response_history + [0.0] * (20 - len(response_history))
+
+                固定長 40 次元
+                前半20：曲ID履歴
+                後半20：反応履歴
+                LSTM / NN に食わせやすくするための設計
+            
+            (B) 行動選択（expert policy）
+            🔹 探索あり（10%）
+                if add_exploration and np.random.random() < exploration_rate:
+                    available_tracks = [t for t in range(track_pool_size) if t not in track_history]
+                    best_action = np.random.choice(available_tracks)
+                    best_response = deterministic_sim.get_response(current_state, best_action, step)
+
+                あえてランダムに曲を出す
+                データの多様性確保（overfitting防止
+
+            🔹 通常（90%）：擬似 greedy 最適化
+                else:
+                    candidates = np.random.choice(track_pool_size, size=50, replace=False)
+                
+                全256曲を評価すると重いので50曲だけランダムサンプリング
+                    best_action = None
+                    best_response = -1
+                
+
+                    for candidate in candidates:
+                        if candidate not in track_history:
+                            temp_response = deterministic_sim.get_response(current_state, candidate, step)
+                    既出曲は除外
+                    最も反応が良い曲を選ぶ
+                    「計算量を抑えた近似的な expert 行動」
+                            if temp_response > best_response:
+                                best_response = temp_response
+                                best_action = candidate
+
+                    if best_action is None:
+                        best_action = np.random.randint(0, track_pool_size)
+                        best_response = deterministic_sim.get_response(current_state, best_action, step)
+                    候補が全部履歴に含まれていた場合の保険
+
+                state_with_action = current_state + [float(best_action)]
+                trajectories.append((state_with_action, best_response))
+                状態 + 行動 → 反応
+                行動を state に含めるのが重要
+                LSTMは「この行動を取ったらどうなるか」を学習する
+            
+                track_history.append(best_action)
+                response_history.append(best_response)
+                次ステップの状態に反映
+
+
+       if (traj_idx + 1) % 500 == 0:
+            avg_quality = np.mean([t[1] for t in trajectories[-10000:]])
+            print(f"軌跡生成 {traj_idx + 1}/{n_trajectories}, 平均応答率: {avg_quality:.3f}")
+            
+            最近の反応平均
+            生成データの質チェック
+
+    print("=" * 60)
+    print(f"合計 {len(trajectories)} ステップの学習データを生成")
+    print("=" * 60)
+    return trajectories
+
+
+
+def pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=20, batch_size=64):
+    print("\nLSTMシミュレータの事前学習開始...")
+    from config.config import DEVICE
+    
+    optimizer = optim.Adam(lstm_sim.parameters(), lr=0.001, weight_decay=1e-5)
+    criterion = nn.BCELoss()
+    
+    for epoch in range(n_epochs):
+        random.shuffle(trajectories)
+        epoch_losses = []
+        
+        for i in range(0, len(trajectories) - batch_size, batch_size):
+            batch = trajectories[i:i+batch_size]
+            # Convert lists of numpy arrays to a single numpy array first (faster)
+            states_np = np.array([t[0] for t in batch], dtype=np.float32)
+            targets_np = np.array([t[1] for t in batch], dtype=np.float32)
+
+            states = torch.from_numpy(states_np).float().unsqueeze(1).to(DEVICE)
+            targets = torch.from_numpy(targets_np).float().unsqueeze(1).unsqueeze(2).to(DEVICE)
+            
+            outputs, _ = lstm_sim(states)
+            loss = criterion(outputs, targets)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(lstm_sim.parameters(), 1.0)
+            optimizer.step()
+            
+            epoch_losses.append(loss.item())
+        
+        avg_loss = np.mean(epoch_losses)
+        if (epoch + 1) % 5 == 0:
+            print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {avg_loss:.4f}")
+    
+    print(f"事前学習完了! 最終Loss: {avg_loss:.4f}\n")
+
+
+    入力と出力
+    def pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=20, batch_size=64):
+    （入力）    
+        lstm_sim       # LSTM ユーザーシミュレータ（nn.Module）
+        trajectories  # expert が生成した教師データ
+        n_epochs      # 学習エポック数
+        batch_size    # ミニバッチサイズ
+    （出力）
+        戻り値なし
+        lstm_sim の重みが更新される（副作用）
+
+    １. 初期設定
+        optimizer = optim.Adam(lstm_sim.parameters(), lr=0.001, weight_decay=1e-5)
+        criterion = nn.BCELoss()
+    
+        🔹 Optimizer
+         Adam：安定かつ高速
+         weight_decay：過学習抑制（L2 正則化）
+        🔹 Loss 関数
+            BCELoss
+            出力は 0〜1 の確率
+            ユーザーの「反応する / しない」を確率的に予測
+        👉 lstm_sim の最終層が sigmoid である前提
+    
+    ２. 学習ループの流れ
+        for epoch in range(n_epochs):
+            random.shuffle(trajectories)
+            epoch_losses = []
+
+            (a) データ全体を何度も見せる
+                毎エポックで trajectory をシャッフル
+        
+            for i in range(0, len(trajectories) - batch_size, batch_size):
+
+            (b) SGD（確率的勾配降下法）
+                batch = trajectories[i:i+batch_size]
+                # Convert lists of numpy arrays to a single numpy array first (faster)
+            
+            (c) NumPy → Tensor 変換（高速化）
+                states_np = np.array([t[0] for t in batch], dtype=np.float32)
+                targets_np = np.array([t[1] for t in batch], dtype=np.float32)
+
+                Python list → NumPy 配列 → Tensor
+                torch.tensor(list) より高速
+
+            (d) states の shape
+                states = torch.from_numpy(states_np).float().unsqueeze(1).to(DEVICE)
+
+                (batch_size, seq_len=1, state_dim)
+                今回は「1ステップ LSTM」
+                LSTM を MLP 代わりに使っている設計
+
+            (e) targets の shape
+                targets = torch.from_numpy(targets_np).float().unsqueeze(1).unsqueeze(2).to(DEVICE)
+            
+            (f) Forward
+                outputs, _ = lstm_sim(states)
+
+                outputs：ユーザー反応の予測確率
+                hidden state は捨てている（事前学習では不要
+
+            (g) Loss 計算
+                loss = criterion(outputs, targets)
+
+                expert の反応と LSTM の予測のズレ
+            
+            (h) Backpropagation
+                optimizer.zero_grad()
+                loss.backward()
+
+            (i) 勾配クリッピング      
+                torch.nn.utils.clip_grad_norm_(lstm_sim.parameters(), 1.0)
+
+                LSTM 特有の 勾配爆発防止
+                安定学習の重要ポイント
+            
+            (j) パラメータ更新
+                optimizer.step()
+            
+            (k) ログ集計
+                epoch_losses.append(loss.item())
+        
+        avg_loss = np.mean(epoch_losses)
+        if (epoch + 1) % 5 == 0:
+            print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {avg_loss:.4f}")
+
+            学習進捗の可視化
+            5エポックごとに出力
+    
+    print(f"事前学習完了! 最終Loss: {avg_loss:.4f}\n")
+
+
+
+    Q. なぜこの構成なのか（設計意図）
+        ✔ なぜ事前学習するのか
+        RL 初期はランダム行動 → 学習が遅い
+        先に「まともなユーザー近似モデル」を作ることで
+        DQN / policy learning が安定
+        サンプル効率が向上
+    
+    Q なぜ BCELoss か
+        ユーザー反応を確率とみなす
+        報酬 ∈ [0,1] を自然に扱える
+
+    Q なぜ seq_len = 1 か
+        時系列情報は state にエンコード済み
+        LSTM は非線形変換
+        将来の拡張（真の時系列）を見越した選択

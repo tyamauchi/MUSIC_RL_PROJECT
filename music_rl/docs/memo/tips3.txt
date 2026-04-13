@@ -1,0 +1,432 @@
+user_simulator.py
+
+役割の全体像
+DeterministicUserSimulator：
+    推薦システムが出した action（曲ID）
+    現在の state（過去の曲履歴＋反応履歴）
+    時刻 step
+を受け取り、
+👉 「その曲に対してユーザーがどれくらい好反応を示すか（0〜1）」
+を返す擬似ユーザー。
+
+
+１　初期化 (__init__)
+np.random.seed(42)
+self.track_preferences = np.random.rand(track_pool_size) * 0.4 + 0.6
+self.track_genres = np.random.randint(0, 10, track_pool_size)
+self.genre_preferences = None
+
+① track_preferences
+    各トラックごとの 基礎的な好み   
+    値域：[0.6, 1.0]
+    →「嫌いな曲はほぼ存在しない」前提
+
+② track_genres
+    各曲に ジャンルID（0〜9） を割り当て
+
+③ genre_preferences
+    ユーザーのジャンル嗜好（エピソードごとに変化）
+    reset_user_state() で初期化
+
+２. def reset_user_state(self):
+    self.genre_preferences = np.random.rand(10) * 0.4 + 0.6
+    
+    ユーザー状態のリセット
+    各ジャンルに対する好みを [0.6, 1.0] で再生成
+    👉 「エピソードごとに違うユーザー」
+    強化学習でいう episode reset
+
+3.  def get_response(self, state, action, step):
+
+    def get_response(self, state, action, step):
+        action_idx = int(action)
+        base_response = self.track_preferences[action_idx]
+        genre_match = self.genre_preferences[self.track_genres[action_idx]]
+        base_response = base_response * 0.6 + genre_match * 0.4
+        
+        state_array = np.array(state)
+        track_history = state_array[:len(state_array)//2]
+        response_history = state_array[len(state_array)//2:]
+        
+        if step > 0:
+            prev_responses = [r for r in response_history[:step] if r > 0]
+            if len(prev_responses) > 0:
+                recent_avg = np.mean(prev_responses[-3:])
+                if abs(base_response - recent_avg) < 0.15:
+                    base_response += 0.05
+        
+        if action_idx in track_history[:step]:
+            base_response *= 0.3
+        
+        base_response += np.random.normal(0, 0.02)
+        return np.clip(base_response, 0.0, 1.0)
+
+| 引数      | 意味      　  |             　 |
+| -------- | --------- 　　| ------------ 　|
+| `state`  | `[track履歴 　| response履歴]` |
+| `action` | 推薦された曲ID |              　|
+| `step`   | 時刻（何曲目か）|              　|
+
+
+①
+    base_response = self.track_preferences[action_idx]
+    genre_match = self.genre_preferences[self.track_genres[action_idx]]
+    base_response = base_response * 0.6 + genre_match * 0.4
+
+    曲固有の魅力：60%   
+    ジャンル一致度：40%
+
+    「良い曲でも、ジャンルが合わなければ評価は下がる」
+    という 人間らしい仮定
+
+② Stateの分解
+    track_history = state_array[:len(state_array)//2]
+    response_history = state_array[len(state_array)//2:]
+
+    state の構造は：
+        [ t0, t1, t2, ... | r0, r1, r2, ... ]
+    
+        前半：過去に推薦された曲ID
+        後半：そのときのユーザー反応
+
+③ 最近の満足度との一貫性ボーナス
+    if abs(base_response - recent_avg) < 0.15:
+        base_response += 0.05
+
+    最近気に入っている傾向と今回の曲が 近い満足度 なら
+                ↓
+    「流れが合っている」ボーナス
+    （意味）    
+        プレイリストの一貫性
+        ムード継続効果
+
+    ※　python文法において”:”（コロン）の意味
+    スライスにおける [ ] 内の : は、「〜から〜まで」という範囲を指定する記号。
+    基本的な書き方は [開始位置 : 終了位置] となりる。 
+    [:終了位置]（左側を省略）
+    「最初（インデックス0）」から「終了位置の直前」までを抽出する。
+    [開始位置:]（右側を省略）
+    「開始位置」から「最後」までを抽出する。
+
+④　一貫性（ムード継続）を表現するロジック
+    if step > 0:
+        prev_responses = [r for r in response_history[:step] if r > 0]
+        if len(prev_responses) > 0:
+            recent_avg = np.mean(prev_responses[-3:])
+            if abs(base_response - recent_avg) < 0.15:
+                base_response += 0.05
+    
+    (a) if step > 0:
+        まだ1曲も推薦していない (step == 0) 場合は比較できない
+        過去の履歴があるときだけ実行
+
+    (b) prev_responses = [r for r in response_history[:step] if r > 0]
+        
+        ・response_history[:step]
+          今までの反応履歴
+        ・if r > 0
+        　→ 無反応・スキップ・未定義（0以下）を除外
+        ・「実際にユーザーが何らかの好意を示した履歴だけ」 を使う
+
+    (c) recent_avg = np.mean(prev_responses[-3:])
+        ・最近の平均満足度を計算
+          直近 最大3件 の反応の平均、長期履歴ではなく最近の気分を表す
+          例：過去反応: [0.9, 0.85, 0.88] → recent_avg ≈ 0.88
+
+    (d) if abs(base_response - recent_avg) < 0.15:
+        base_response
+            → 曲の魅力＋ジャンル適合度から計算された今回の満足度
+            差が 0.15 未満
+            → 最近の流れと“違和感がない”
+                                ↓
+            「テンションが高いときに、急に合わない曲が来てないか？」を判定している
+    
+    (e) base_response += 0.05
+        ボーナス付与
+        流れが合っていれば 満足度を少し上乗せ(数値的には小さいが、学習には効く)
+
+    ※強化学習的な意味
+        状態依存報酬 を入れている
+        同じ曲でも：
+            流れが合えば高報酬
+            合わなければ通常報酬
+        エージェントは
+    「単発で良い曲」ではなく「流れを作る行動」を学習するようになる
+
+⑤ 同じ曲の再推薦ペナルティ
+    if action_idx in track_history[:step]:
+        base_response *= 0.3
+
+    すでに聴いた曲なら 評価激減
+    「同じ曲ばかり出すな」という強い負の報酬
+    推薦モデルへの 探索圧
+
+⑥ ノイズ付加
+    base_response += np.random.normal(0, 0.02)
+    ・完全決定論を避ける
+    ・LSTM が 分布を学習 できるようにする
+
+⑦ 最終出力
+    return np.clip(base_response, 0.0, 1.0)
+    ・出力は常に [0,1]
+    ・LSTM版の Sigmoid 出力と整合
+
+
+4.  このシミュレータの位置づけ
+    ・LSTMUserSimulator を事前学習するための教師
+    ・RLの環境としての「仮想ユーザー」
+
+    特徴
+    特性	   内容
+    決定論的	ルールは固定
+    擬似人間的	嗜好・一貫性・飽き
+    学習不要	安定したデータ生成
+    解釈可能	なぜその反応か説明できる
+
+５. LSTM版との関係
+    Deterministic	LSTM
+    ルールベース	データ駆動
+    教師・環境	    模倣対象
+    解釈可能	    ブラックボックス
+    固定挙動	    汎化可能
+
+
+
+
+class LSTMUserSimulator(nn.Module):
+    def __init__(self, input_size, hidden_sizes=LSTM_HIDDEN_SIZE):
+        super(LSTMUserSimulator, self).__init__()
+        self.hidden_sizes = hidden_sizes
+        
+        self.lstm1 = nn.LSTM(input_size, hidden_sizes[0], batch_first=True)
+        self.lstm2 = nn.LSTM(hidden_sizes[0], hidden_sizes[1], batch_first=True)
+        self.lstm3 = nn.LSTM(hidden_sizes[1], hidden_sizes[2], batch_first=True)
+        
+        self.output_layer = nn.Sequential(
+            nn.Linear(hidden_sizes[2], 32),
+            nn.ReLU(),
+            nn.Dropout(0.4),
+            nn.Linear(32, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, hidden=None):
+        out1, hidden1 = self.lstm1(x, hidden[0] if hidden else None)
+        out2, hidden2 = self.lstm2(out1, hidden[1] if hidden else None)
+        out3, hidden3 = self.lstm3(out2, hidden[2] if hidden else None)
+        
+        completion_prob = self.output_layer(out3)
+        return completion_prob, (hidden1, hidden2, hidden3)
+
+
+
+. この役割の全体像）
+LSTMUserSimulator：
+    ユーザーの行動履歴（state の時系列）を入力として
+    「このレコメンドに対してユーザーがどれくらい好反応するか」（ここでは 0〜1 の確率）
+    を学習ベースで推定するユーザーシミュレータ
+
+    DeterministicUserSimulator が ルールベースの擬似ユーザー なのに対し、
+    こちらは データから学習するブラックボックスなユーザー。
+
+１. __init__ の解説（ネットワーク構造）
+class LSTMUserSimulator(nn.Module):
+    def __init__(self, input_size, hidden_sizes=LSTM_HIDDEN_SIZE):
+        super(LSTMUserSimulator, self).__init__()
+        self.hidden_sizes = hidden_sizes
+
+① input_size
+    各 timestep の入力次元
+    例：
+    track_id の embedding
+    過去の response
+    genre one-hot
+    etc…
+    ・1時刻あたりの特徴量数
+
+② LSTM を3層重ねている理由
+    self.lstm1 = nn.LSTM(input_size, hidden_sizes[0], batch_first=True)
+    self.lstm2 = nn.LSTM(hidden_sizes[0], hidden_sizes[1], batch_first=True)
+    self.lstm3 = nn.LSTM(hidden_sizes[1], hidden_sizes[2], batch_first=True)
+
+    構造：
+    Input sequence
+       ↓
+    LSTM (低レベルの行動パターン)
+        ↓
+    LSTM (中期的嗜好)
+        ↓
+    LSTM (長期的傾向・文脈)
+
+    なぜ3層？
+    浅い LSTM：直近の行動に強い
+    深い LSTM：嗜好の変化・セッション構造を捉えやすい
+
+③ 出力層（completion probability）
+    self.output_layer = nn.Sequential(
+    nn.Linear(hidden_sizes[2], 32),
+    nn.ReLU(),
+    nn.Dropout(0.4),
+    nn.Linear(32, 1),
+    nn.Sigmoid()
+    )
+
+    ・何をしているか
+    最終 LSTM の隠れ状態 → 1次元の確率
+    Sigmoid により 0〜1
+    ・意味
+    「この timestep の行動が成功する確率」
+    再生完了率
+    Like する確率
+    ポジティブ反応確率
+
+
+２. forward の解説（データの流れ）
+    def forward(self, x, hidden=None):
+
+    ・ 入力 x
+        shape:
+        (batch_size, sequence_length, input_size)
+        例：
+        10セッション × 20ステップ × state次元
+
+    ・ hidden を受け取れる理由
+        out1, hidden1 = self.lstm1(x, hidden[0] if hidden else None)
+        RNN をセッション間で継続したい　
+                or 
+        途中から rollout したい
+        ときに使える設計。
+    
+    ・ LSTM を段階的に通す
+        out1 → out2 → out3
+        各 out の shape：
+        (batch_size, sequence_length, hidden_size)
+    
+    ・ 出力確率を timestep ごとに計算
+        completion_prob = self.output_layer(out3)
+        各 timestep に対して確率を出す
+
+        (batch_size, sequence_length, 1)
+        「この時刻で推薦したアイテムに対する反応確率」
+    
+３. 戻り値
+    return completion_prob, (hidden1, hidden2, hidden3)
+
+    なぜ hidden を返す？
+    次の rollout に継続利用できる
+    強化学習（PPO / A2C / DQN + RNN）と相性が良い
+
+
+4. DeterministicUserSimulator との関係
+    項目	    Deterministic	   LSTM
+    性質	    ルールベース	     学習ベース
+    再現性	    高い	            データ依存
+    ノイズ	    手動	            学習で獲得
+    RL学習用	教師生成	         環境モデル
+
+Deterministic で expert trajectory 生成
+LSTMUserSimulator に imitation learning
+LSTM をユーザー環境として RL 学習
+
+
+
+Q このコード(main.py)でLSTMUserSimulatorにDeterministicUserSimulatorを引数として入れる理由は？
+A 「LSTMUserSimulator は “ユーザー” ではなく、“ユーザーの近似モデル” だから」。
+
+    DeterministicUserSimulator（真のユーザー）
+    → その振る舞いを真似る LSTMUserSimulator（学習された疑似ユーザー）
+    → その疑似ユーザー相手に RL エージェントを学習
+
+1. このパイプラインの思想（超重要）
+    この設計は Model-based RL + Imitation Learning に近い。
+
+    [真のユーザー]
+    DeterministicUserSimulator or Last.fm 実データ
+            ↓ (expert trajectories)
+    [ユーザーモデル]
+    LSTMUserSimulator
+            ↓ (環境として固定)
+    [推薦エージェント]
+        DoubleDQNAgent
+    
+    RL は直接「真のユーザー」に触らせない
+
+2. DeterministicUserSimulator を引数として使う理由
+    ① DeterministicUserSimulator = 教師（Oracle）
+    det_sim = DeterministicUserSimulator(TRACK_POOL_SIZE)
+    trajectories = generate_expert_trajectories(det_sim, ...)
+
+    ここでやっていることは：
+    決め打ちルールで動く「理想的ユーザー」を用意
+    そのユーザーがどんな state で どの track を出され
+    どんな response を返したか?
+                        ↓
+    完全な教師データ（expert trajectories）を大量生成
+    つまり：
+    DeterministicUserSimulator は
+        「 正解を知っているユーザー」
+    
+    ② LSTMUserSimulator は “ユーザーを学習するモデル”
+    lstm_sim = LSTMUserSimulator(STATE_DIM + 1)
+    pretrain_lstm_with_expert_data(lstm_sim, trajectories)
+
+    ここで LSTM が学ぶのは：
+    入力：state + action
+    出力：response
+
+    つまり：
+        「このユーザーなら、こう反応するはず」
+    を近似する関数。
+
+    数式で言うと：
+    User(s_t, a_t, history) ≈ LSTM(s_t, a_t)
+
+
+     なぜ RL で det_sim を直接使わない？
+        「最初から DeterministicUserSimulator を env に入れればいいのでは？」
+    
+    理由①：決定論ルールは「学習されると壊れる」
+        det_sim は：
+        報酬構造が単純
+        ノイズが少ない
+        パターンが固定
+            ↓
+        DQN が 簡単に exploit してしまい、
+        同じ track を避ける
+        ご褒美の出る組み合わせだけ回す
+        など、不自然な方策になりがち。
+
+    理由②：LSTM は「人間っぽい不確実性」を持てる
+        LSTMUserSimulator は：
+        ノイズを含む
+        履歴依存が強い
+        長期的嗜好を内包
+            ↓
+        RL 側から見ると：
+        状態遷移が確率的
+        完全に読めない　    ＝ これらから現実ユーザーに近い
+    
+    理由③：Last.fm 実データに切り替えられる
+        USE_REAL_LASTFM_DATA = True
+    
+        このフラグが象徴的です。
+        det_sim → Last.fm
+        Last.fm → LSTM
+        に差し替え可能。
+
+３. 「LSTM に det_sim を渡す」の正確な意味
+    LSTMUserSimulatorにDeterministicUserSimulatorを引数として入れる理由
+
+    学習データ生成のために使っている
+    det_sim ──(trajectory生成)──▶ trajectories
+                                    ↓
+                               LSTMUserSimulator
+
+
+４. この設計の本質（重要）
+    これは実務・研究でよく使われる考え方。
+    ユーザーは 直接最適化対象にしない
+    ユーザーを モデル化
+    エージェントは モデル相手に学習
+    理由は単純：
+    ユーザーは学習できないが、モデルは学習できる

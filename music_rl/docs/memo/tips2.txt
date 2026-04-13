@@ -1,0 +1,136 @@
+training.py
+1. pretrain_lstm_with_expert_data(lstm_sim, trajectories, ...)
+expert trajectory（Last.fm 実ユーザ or deterministic sim）を教師データとして、LSTMUserSimulator に「ユーザの反応関数」を事前に学習させる。
+
+def pretrain_lstm_with_expert_data(lstm_sim, trajectories, n_epochs=20, batch_size=64):
+    print("\nLSTMシミュレータの事前学習開始...")
+    from config.config import DEVICE
+    
+    optimizer = optim.Adam(lstm_sim.parameters(), lr=0.001, weight_decay=1e-5)
+    criterion = nn.BCELoss()
+    
+    for epoch in range(n_epochs):
+        random.shuffle(trajectories)
+        epoch_losses = []
+        
+        for i in range(0, len(trajectories) - batch_size, batch_size):
+            batch = trajectories[i:i+batch_size]
+            # Convert lists of numpy arrays to a single numpy array first (faster)
+            states_np = np.array([t[0] for t in batch], dtype=np.float32)
+            targets_np = np.array([t[1] for t in batch], dtype=np.float32)
+
+            states = torch.from_numpy(states_np).float().unsqueeze(1).to(DEVICE)
+            targets = torch.from_numpy(targets_np).float().unsqueeze(1).unsqueeze(2).to(DEVICE)
+            
+            outputs, _ = lstm_sim(states)
+            loss = criterion(outputs, targets)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(lstm_sim.parameters(), 1.0)
+            optimizer.step()
+            
+            epoch_losses.append(loss.item())
+        
+        avg_loss = np.mean(epoch_losses)
+        if (epoch + 1) % 5 == 0:
+            print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {avg_loss:.4f}")
+    
+    print(f"事前学習完了! 最終Loss: {avg_loss:.4f}\n")
+
+
+なぜ必要？
+RL開始直後に ランダムなユーザモデル を使うと
+→ reward がほぼノイズ
+→ DQN が発散しやすい
+
+(state, action) → response (0/1 or [0,1])
+を LSTM に学ばせることで、環境が安定
+・RL が意味のある探索から開始
+・Model-based RL に近い挙動
+
+Behavior Cloning（模倣学習）＋ User Model Pretraining です。
+
+2. trajectories の中身
+この関数が想定している trajectory 形式：
+trajectory = (state, target)
+
+state:
+    ユーザ状態 + 行動（推薦トラック）
+    shape: [STATE_DIM + 1]
+target:
+    ユーザ反応（click / listen / like 等）
+    値域: [0,1]
+「この状態でこの曲を出したら、ユーザはどう反応したか」 を教師にしている。
+
+3. 関数全体構造
+for epoch:
+    shuffle trajectories
+    for each batch:
+        states, targets 作成
+        LSTM forward
+        BCELoss
+        backprop
+
+4. 行ごとの詳細解説
+① optimizer / loss 定義
+    optimizer = optim.Adam(
+        lstm_sim.parameters(),
+        lr=0.001,
+        weight_decay=1e-5
+    )
+    criterion = nn.BCELoss()
+
+    optimizer
+         Adam：時系列＋LSTMでは安定
+        weight_decay:
+        → ユーザモデルの過学習防止（Last.fm は特に重要）
+
+    loss
+        BCELoss
+        出力：[0,1]
+        解釈：
+            「ユーザが好む確率」
+
+② epoch ごとの処理
+    for epoch in range(n_epochs):
+        random.shuffle(trajectories)
+    ・毎 epoch データ順をランダム化
+    ・時系列データだが、ここでは i.i.d. 教師データとして扱う
+
+③ バッチ生成
+    batch = trajectories[i:i+batch_size]
+    states_np = np.array([t[0] for t in batch], dtype=np.float32)
+    targets_np = np.array([t[1] for t in batch], dtype=np.float32)
+
+    なぜ numpy にまとめる？
+    list → tensor を 1 回で変換（高速）
+    
+    shape 例：
+    states_np  : [B, STATE_DIM+1]
+    targets_np : [B]
+
+④ Tensor 変換 + reshape
+    states = torch.from_numpy(states_np)\
+        .float().unsqueeze(1).to(DEVICE)
+
+    targets = torch.from_numpy(targets_np)\
+        .float().unsqueeze(1).unsqueeze(2).to(DEVICE)
+    
+    states
+        [B, STATE_DIM+1]
+        → unsqueeze(1)
+        → [B, 1, STATE_DIM+1]
+
+        ・LSTM input format：
+            (batch, seq_len, feature)
+        ・ここでは 1 step LSTM（擬似的）
+
+    targets
+        [B]
+        → [B, 1]
+        → [B, 1, 1]
+        LSTM output と shape を合わせるため
+
+
+

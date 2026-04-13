@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
+import shutil
 
 from config.config import *
 from simulators.user_simulator import DeterministicUserSimulator, LSTMUserSimulator
@@ -18,7 +19,7 @@ from utils.evaluation import evaluate_agent
 # ======================================================
 
 USE_REAL_LASTFM_DATA = False  # ← True: Last.fm 実データ / False: det_sim データ
-LASTFM_TRAJ_PATH = "./data/trajectories_lastfm.npy"
+LASTFM_TRAJ_PATH = "./data/hetrec2011-lastfm/trajectories_lastfm.npy"
 
 
 def main():
@@ -119,7 +120,7 @@ def main():
         if (episode + 1) % 10 == 0:
             print(f"Ep {episode+1:3d} | Reward: {total_reward:6.2f} | Avg: {avg_reward:6.2f} | ε: {epsilon:.3f}")
     
-    writer.close()
+    # training finished — keep writer open until after evaluation and copying
     
 
     # ======================================================
@@ -133,6 +134,31 @@ def main():
     }
     
     agent.save_model(save_dir, metrics, cached_action_features)
+    # Log evaluation metrics to TensorBoard
+    try:
+        writer.add_scalar('Test/Mean_Reward', float(test_results['mean_reward']), 0)
+        writer.add_scalar('Test/Std_Reward', float(test_results['std_reward']), 0)
+        writer.add_scalar('Test/Mean_Response', float(test_results.get('mean_response', 0.0)), 0)
+    except Exception:
+        pass
+
+    # Close writer after all logging done
+    writer.close()
+
+    # Copy tensorboard logs into the saved model directory so events are preserved
+    try:
+        dst_tb_dir = os.path.join(save_dir, 'tensorboard')
+        shutil.copytree(log_dir, dst_tb_dir, dirs_exist_ok=True)
+    except TypeError:
+        # For older Python versions without dirs_exist_ok
+        try:
+            if os.path.exists(dst_tb_dir):
+                shutil.rmtree(dst_tb_dir)
+            shutil.copytree(log_dir, dst_tb_dir)
+        except Exception:
+            # Non-fatal: just continue
+            pass
+
     print(f"\n完了！保存先: {save_dir}")
 
 

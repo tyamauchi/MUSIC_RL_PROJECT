@@ -1,0 +1,1042 @@
+{
+  "171140 on 171140 (\u30aa\u30ea\u30b8\u30ca\u30eb)": {
+    "mean_reward": 20.374171486124396,
+    "std_reward": 0.0,
+    "min_reward": 20.374171486124396,
+    "max_reward": 20.374171486124396,
+    "mean_response": 0.049999988079071044,
+    "std_response": 0.0,
+    "session_details": [
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.374171486124396,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      }
+    ]
+  },
+  "171140 on 172211 (\u30af\u30ed\u30b9\u30c6\u30b9\u30c8)": {
+    "mean_reward": 21.501734137535095,
+    "std_reward": 0.0,
+    "min_reward": 21.501734137535095,
+    "max_reward": 21.501734137535095,
+    "mean_response": 0.0487865388393402,
+    "std_response": 1.3877787807814457e-17,
+    "session_details": [
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.501734137535095,
+        "avg_response": 0.04878653883934021,
+        "unique_tracks": 20
+      }
+    ]
+  },
+  "172211 on 172211 (\u30aa\u30ea\u30b8\u30ca\u30eb)": {
+    "mean_reward": 21.492089092731476,
+    "std_reward": 0.0,
+    "min_reward": 21.492089092731476,
+    "max_reward": 21.492089092731476,
+    "mean_response": 0.04857780039310455,
+    "std_response": 0.0,
+    "session_details": [
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 21.492089092731476,
+        "avg_response": 0.04857780039310455,
+        "unique_tracks": 20
+      }
+    ]
+  },
+  "172211 on 171140 (\u30af\u30ed\u30b9\u30c6\u30b9\u30c8)": {
+    "mean_reward": 20.34622602444142,
+    "std_reward": 0.0,
+    "min_reward": 20.34622602444142,
+    "max_reward": 20.34622602444142,
+    "mean_response": 0.049999988079071044,
+    "std_response": 0.0,
+    "session_details": [
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      },
+      {
+        "reward": 20.34622602444142,
+        "avg_response": 0.049999988079071044,
+        "unique_tracks": 20
+      }
+    ]
+  }
+}

@@ -41,6 +41,23 @@ class PlaylistRecommender:
         # アクション特徴量の読み込み
         action_features_path = os.path.join(self.model_dir, 'action_features.pth')
         self.action_features = torch.load(action_features_path, map_location=DEVICE)
+
+        # メタデータがアクション数と一致しなければ再生成して読み直す
+        try:
+            metadata_count = len(TRACK_DB) if TRACK_DB is not None else 0
+        except Exception:
+            metadata_count = 0
+
+        action_count = self.action_features.size(0)
+        if metadata_count != action_count:
+            try:
+                from track_metadata import load_track_metadata
+                print(f"⚠ メタデータ数({metadata_count})がアクション数({action_count})と不一致のため再生成します。")
+                # load_track_metadata will prefer hetrec raw files when present
+                globals()["TRACK_DB"] = load_track_metadata(n_tracks=action_count)
+                print(f"✓ メタデータ再生成完了: {len(TRACK_DB)}曲")
+            except Exception as e:
+                print(f"✖ メタデータ再生成に失敗しました: {e}")
         
         # メトリクスの読み込み
         metrics_path = os.path.join(self.model_dir, 'metrics.json')

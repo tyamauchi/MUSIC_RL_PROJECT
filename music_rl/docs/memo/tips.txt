@@ -1,0 +1,515 @@
+
+１　user_behavior.py
+
+import pandas as pd
+import numpy as np
+from collections import defaultdict
+
+# ファイルパス
+DATA_PATH = "./hetrec2011-lastfm-2k"
+
+# =============================
+# 1. データ読み込み
+# =============================
+user_artists = pd.read_csv(
+    f"{DATA_PATH}/user_artists.dat",
+    sep="\t"
+)
+
+print("Loaded:", user_artists.head())
+
+# =============================
+# 2. ユーザーごとに artistID のリストを作る
+#    再生回数(weight)でソートして疑似時系列化
+# =============================
+
+user_sequences = defaultdict(list)
+
+for user, group in user_artists.groupby("userID"):
+    # 再生回数順で並べる（多い=よく聞く）
+    seq = group.sort_values("weight", ascending=False)["artistID"].tolist()
+    user_sequences[user] = seq
+
+print("Example user sequence:", list(user_sequences.items())[:1])
+
+# =============================
+# 3. 系列 → (input → next) に変換
+# =============================
+
+def generate_training_samples(sequences, seq_len=10):
+    X, y = [], []
+
+    for user, seq in sequences.items():
+        if len(seq) <= seq_len:
+            continue
+
+        # スライドして系列を作る
+        for i in range(len(seq) - seq_len):
+            X.append(seq[i : i + seq_len])
+            y.append(seq[i + seq_len])
+
+    return np.array(X), np.array(y)
+
+SEQ_LEN = 10
+X, y = generate_training_samples(user_sequences, seq_len=SEQ_LEN)
+
+print("X shape:", X.shape)
+print("y shape:", y.shape)
+
+# =============================
+# 保存したい場合
+# =============================
+np.save("X_train.npy", X)
+np.save("y_train.npy", y)
+print("Saved X_train.npy & y_train.npy")
+
+--------------------------------------------------------------------------------
+def generate_training_samples(sequences, seq_len=10):
+    X, y = [], []
+
+    for user, seq in sequences.items():
+        if len(seq) <= seq_len:
+            continue
+
+        # スライドして系列を作る
+        for i in range(len(seq) - seq_len):
+            X.append(seq[i : i + seq_len])
+            y.append(seq[i + seq_len])
+
+    return np.array(X), np.array(y)
+
+
+解説：
+user_sequences の中身
+{
+  userID1: [artistA, artistB, artistC, artistD, ...],
+  userID2: [artistX, artistY, artistZ, ...],
+  ...
+}
+
+再生回数（weight）が多い順
+→ 「そのユーザーがよく聴く順」＝疑似的な時系列
+
+・generate_training_samples の目的
+「過去に聴いたアーティスト列」から「次に来るアーティスト」を予測するための学習データ (X, y) を作る
+Next-item prediction（次アイテム予測）用のデータ生成。
+
+・中身の分解
+def generate_training_samples(sequences, seq_len=10):
+    X, y = [], []
+
+    X：入力系列（長さ = seq_len）
+    y：その直後に来る 正解ラベル（次のartist）
+
+① ユーザーごとに処理
+    for user, seq in sequences.items():
+    1ユーザーずつ処理
+    seq は例えば：
+    [12, 98, 34, 77, 5, 21, 9, 88, 66, 101, 42, ...]
+
+② 短すぎる系列は捨てる
+    if len(seq) <= seq_len:
+        continue
+    入力が 10曲必要なのに、それ以下しか聴いてないユーザーは学習に使えない
+
+③ スライディングウィンドウでデータ生成
+    for i in range(len(seq) - seq_len):
+    例：
+        seq = [A, B, C, D, E, F, G, H, I, J, K, L]
+        seq_len = 5
+
+        すると i ごとに：
+        i	X（入力）	y（正解）
+        0	[A, B, C, D, E]	F
+        1	[B, C, D, E, F]	G
+        2	[C, D, E, F, G]	H
+        3	[D, E, F, G, H]	I
+        …	…	…
+        これを 全ユーザー分作る。
+
+④ 実際のコード対応
+    X.append(seq[i : i + seq_len])
+    y.append(seq[i + seq_len])
+    X → 「連続した seq_len 個の artistID」
+    y → 「その直後の artistID」
+
+    出力される X, y の正体
+    X.shape = (サンプル数, 10)
+    y.shape = (サンプル数,)
+    
+    中身の意味
+    X[0] = [12, 98, 34, 77, 5, 21, 9, 88, 66, 101]
+    y[0] = 42
+    →「この10アーティストをよく聴いているユーザーは次に artist 42 を聴く可能性が高い」
+
+まとめ：
+user_sequences
+   ↓
+疑似時系列（よく聴く順）
+   ↓
+長さ10の履歴 → 次の1曲
+   ↓
+(X, y) 学習データ完成
+
+
+２　create_lastfm_trajectories.py
+
+def create_lastfm_trajectories(
+    X_path="X_train.npy",
+    y_path="y_train.npy",
+    save_path="trajectories_lastfm.npy"
+):
+    # --------------------------------------------------
+    #  Load X, y
+    # --------------------------------------------------
+    if not os.path.exists(X_path):
+        raise FileNotFoundError(f"{X_path} が見つかりません")
+    if not os.path.exists(y_path):
+        raise FileNotFoundError(f"{y_path} が見つかりません")
+
+    print("Loading X and y...")
+    X = np.load(X_path)
+    y = np.load(y_path)
+
+    print(f"Loaded X: {X.shape}, y: {y.shape}")
+
+    trajectories = []
+    N = len(X)
+
+    print("Converting to compact trajectories (store indices, not dense multi-hot)...")
+
+    # --------------------------------------------------
+    #  X[i] は 「過去10個の artistID」
+    #  y[i] は 「次の artistID」
+    #  LSTM の pretrain が期待する形式に合わせる:
+    #    state_with_action: [track_history(20), response_history(20), action] (合計 41)
+    #    target/response: float (0..1)
+    #  response_history 情報は Last.fm 生データには無いので 0 埋めする。
+    # --------------------------------------------------
+    # Prepare artist pool from X (unique artist IDs present) to sample negatives
+    try:
+        artist_pool = np.unique(X.flatten()).astype(int)
+    except Exception:
+        artist_pool = np.arange(MAX_ARTIST_ID)
+
+    for i in range(N):
+        past_ids = list(map(int, X[i].tolist()))  # 長さ 10 を想定
+        next_id = int(y[i])
+
+        # track_history: past ids を左詰めで 20 長にし、残りは 0.0
+        track_history = [float(x) for x in past_ids] + [0.0] * (20 - len(past_ids))
+
+        # response_history: 実データに応答値がないため 0.0 で埋める
+        response_history = [0.0] * 20
+
+        current_state = track_history + response_history  # length 40
+
+        # Positive example: next_id が再生された -> response = 1.0
+        pos_state = np.array(current_state + [float(next_id)], dtype=np.float32)
+        trajectories.append((pos_state, 1.0))
+
+        # Negative example: ランダムな別トラックを action として response = 0.0
+        # artist_pool から next_id を除外してサンプリング
+        try:
+            candidates = artist_pool[artist_pool != next_id]
+            if len(candidates) == 0:
+                raise ValueError
+            neg_action = int(np.random.choice(candidates))
+        except Exception:
+            # フォールバック: 0..MAX_ARTIST_ID-1 からランダムに選ぶ（next_id を除外）
+            neg_action = int(np.random.choice([x for x in range(MAX_ARTIST_ID) if x != next_id]))
+
+        neg_state = np.array(current_state + [float(neg_action)], dtype=np.float32)
+        trajectories.append((neg_state, 0.0))
+
+    print(f"Generated {len(trajectories)} trajectories.")
+
+    # --------------------------------------------------
+    #  NumPy の object array として保存（各要素は小さいオブジェクトなのでメモリ効率良い）
+    # --------------------------------------------------
+    trajectories_array = np.array(trajectories, dtype=object)
+    np.save(save_path, trajectories_array, allow_pickle=True)
+
+    print(f"Saved to {save_path}")
+    return trajectories_array
+
+
+全体の流れ　
+(X, y)
+  ↓
+過去10曲 + 次曲
+  ↓
+(state, action, response) に分解
+  ↓
+positive / negative の2サンプルを作る
+  ↓
+RL/LSTM用 trajectories として保存
+
+① 入力データの意味（前提）
+    入力　
+    X.shape = (N, 10)   # 過去10曲の artistID
+    y.shape = (N,)      # 次に聴いた artistID
+
+    1サンプルの意味：
+    X[i] = [a1, a2, ..., a10]
+    y[i] = a11
+
+② この関数の「ゴール」
+    state_with_action: [track_history(20),
+                       response_history(20),
+                       action]   → 合計 41
+    target/response: float (0 or 1)
+
+    ・状態 (state)
+        過去の視聴履歴
+        過去の反応履歴（今回はダミー）
+    ・行動 (action)
+        「今推薦した artist」
+    ・応答 (response / reward)
+        聴いた → 1.0
+        聴かなかった → 0.0
+        👉 UserSimulator / RL pretrain 用の教師データ
+
+③ artist_pool の準備（ネガティブサンプリング用）
+    artist_pool = np.unique(X.flatten()).astype(int)
+
+    ・実際にデータ中に出現した artistID だけを集める
+    ・現実的な負例（ネガティブ）を作るため
+
+    「このユーザー世界に存在するアーティスト一覧」
+    例：
+    (a) X.shape = (N, 10)
+       N 個の学習サンプル
+       各行は「過去10個の artistID」
+
+        X =
+            [[12, 98, 34, 77,  5, 21,  9, 88, 66, 101],
+            [98, 34, 77,  5, 21,  9, 88, 66, 101, 42],
+            ...
+            ]
+
+    (b)  X.flatten()
+        2次元配列 → 1次元配列に潰す
+            [12, 98, 34, 77, 5, 21, 9, 88, 66, 101,
+            98, 34, 77, 5, 21, 9, 88, 66, 101, 42,
+        ...]
+    
+    (c) np.unique(...)
+        np.unique(X.flatten())
+        重複を削除
+        昇順にソートされた一意集合を返す
+            [5, 9, 12, 21, 34, 42, 66, 77, 88, 98, 101]
+        この学習データ中に実際に登場した artistID の集合
+    
+    (d) .astype(int)
+        X が float や object 型で保存されている可能性がある
+        np.random.choice や比較演算で安全に使うため
+
+    
+
+    フォールバックで：
+    np.arange(MAX_ARTIST_ID)
+    が用意されている。
+
+④ メインループ（1サンプル → 2軌跡）
+    for i in range(N):
+
+    ここで 1つの (X[i], y[i]) から2つの trajectory を作る。
+    
+    4-1. 過去履歴の整形
+    past_ids = list(map(int, X[i].tolist()))
+
+    (a) track_history（20次元）
+    track_history = past_ids + [0.0] * (20 - len(past_ids))
+
+    ・実データ：10曲
+    ・期待形式：20曲
+    ・→ 左詰め + 0 padding
+
+    (b) response_history（20次元）
+    response_history = [0.0] * 20
+    Last.fm には「推薦 → ユーザー反応」が無い
+    → 全ゼロでダミー埋め
+
+    (c)状態（40次元）
+    current_state = track_history + response_history
+
+⑤ Positive trajectory（正例）
+    pos_state = current_state + [next_id]
+    trajectories.append((pos_state, 1.0))
+
+    「この状態で artist = next_id を推薦したら
+    ユーザーは 聴いた（報酬1.0）」
+    これは 完全な教師信号。
+
+    例：
+    (a) current_stateの中身
+    current_state =
+        [
+            track_history (20個),
+            response_history (20個)
+        ]  # 合計40
+    ← 今このユーザーがどんな履歴状態にいるか
+
+    (b) [next_id] は何か？
+     next_id = y[i]
+    → 実データで 実際に次に聴かれた artistID
+      推薦システム視点では：
+    　「今、システムが推薦したアーティスト」＝ action
+
+    (c) pos_state = current_state + [next_id]の「+」の意味
+    数式的には
+        state_with_action = (state, action)
+    このユーザー状態で、このアーティストを出した。という (s, a) の組を作っている。
+
+    (d) trajectories.append((pos_state, 1.0))
+        (pos_state, 1.0)
+        pos_state：
+            状態 + 行動（41次元）
+        1.0：
+            ユーザーの応答（reward / response）
+
+    user_state = 過去の視聴履歴
+    action     = 推薦 artist = next_id
+    response   = 聴いた (1.0)
+
+    (s, a, r=1)
+    という 教師付きの行動結果を作っている。
+    policy が next_id を選んだ
+    環境（ユーザー）はポジティブに反応した
+
+
+
+⑥ Negative trajectory（負例）
+    neg_action = random artist (≠ next_id)
+    neg_state = current_state + [neg_action]
+    trajectories.append((neg_state, 0.0))
+
+    「この状態で 別の artist を出したら
+    ユーザーは 反応しなかった（報酬0.0）」
+
+    👉 Implicit feedback の二値化
+    これがないと：
+    常に「聴いたデータ」だけになり
+    モデルが区別を学べない
+
+
+    「本当は聴かれなかったアーティストを、あえて推薦したことにして、ユーザーが反応しなかった（0.0）というデータを作る」
+    # Negative example: ランダムな別トラックを action として response = 0.0
+    # artist_pool から next_id を除外してサンプリング
+    ------------------------------------------------------------------------------------------
+    try:
+        candidates = artist_pool[artist_pool != next_id]
+        if len(candidates) == 0:
+            raise ValueError
+
+        neg_action = int(np.random.choice(candidates))
+
+    except Exception:
+        # フォールバック: 0..MAX_ARTIST_ID-1 からランダムに選ぶ（next_id を除外）
+        neg_action = int(np.random.choice([x for x in range(MAX_ARTIST_ID) if x != next_id]))
+
+    neg_state = np.array(current_state + [float(neg_action)], dtype=np.float32)
+    trajectories.append((neg_state, 0.0))
+    ------------------------------------------------------------------------------------------
+
+    (a) candidates = artist_pool[artist_pool != next_id]
+        
+        artist_pool：
+            →実データに登場した artistID の集合
+        artist_pool != next_id
+            →実際に聴かれた next_id を除外
+        「このタイミングでは聴かれなかった artist の集合」
+
+        → もし除外しないと：
+        　負例なのに、実は正解を引く
+
+    (b) if len(candidates) == 0: raise ValueError
+        極端なケース：
+            ・データが小さい
+            ・artist_pool に next_id しか無い
+        をすると 例外が出る。
+
+    (c) neg_action = np.random.choice(candidates)
+        実在する artist の中から実際には聴かれなかったものを1つ選ぶ
+        意味としては：
+            「このユーザー状態で、このアーティストを推薦していたら、たぶん聴かれなかった」
+
+    (d) neg_action = np.random.choice(
+           [x for x in range(MAX_ARTIST_ID) if x != next_id])
+
+        except Exception:（フォールバック）
+         # フォールバック: 0..MAX_ARTIST_ID-1 からランダムに選ぶ（next_id を除外）
+        artist_pool が空
+        dtype 問題
+        flatten 時の事故
+        など 予期しない状況でも処理を止めないため。
+    
+    (e) neg_state = current_state + [neg_action]
+
+        state = 今のユーザー履歴
+        action = 聴かれなかったアーティスト
+        RL的には　(s, a_neg)
+    
+    (f) trajectories.append((neg_state, 0.0))
+         (response = 0.0)
+         「この推薦は失敗した」
+
+    (g) ⑤、⑥から正例と負例を並べると
+        種類	    action	        response
+        Positive	next_id	        1.0
+        Negative	random artist	0.0
+
+
+
+⑦ 重要ポイント：なぜ multi-hot を使っていない？
+print("Converting to compact trajectories (store indices, not dense multi-hot)...")
+
+    理由
+    artistID 最大 120,000
+    multi-hot → 1サンプル 12万次元
+    非現実的・GPU無駄
+    👉
+    **Embedding 前提の「ID表現」**で保存
+    （LSTM / Transformer に食わせる設計）
+    これは 正解 です。
+
+⑧ 出力形式
+    trajectories_array[i] = (
+    np.array([...41 floats...], dtype=float32),
+    response (0.0 or 1.0)
+    )
+    ・dtype=object で保存
+    ・各要素は小さい → メモリ効率 OK
+
+⑨ 生成されるデータ数
+    len(trajectories) = 2 * N
+    ・1入力 → 正例 + 負例
+    ・学習が安定しやすい
+
+⑩ まとめ
+    この関数は：
+    ・次曲予測データ
+    ・推薦ログ風に再構成
+    ・state / action / reward 明示
+    ・ネガティブサンプリング込み
+    という **「RL UserSimulator 事前学習用の理想的な変換」**をやっています。
+
+
+
+
+※ Multi-hotとは？
+→「複数のカテゴリが同時に1になる one-hot ベクトル」
+
+・one-hot
+    artistID が 5 種類あると仮定すると：
+    artist 2 →　[0, 0, 1, 0, 0]
+
+    →　1サンプルにつき 1つだけ 1
+
+・multi-hot 
+    複数の artist を同時に表せる。
+    artists = [2, 4] →   [0, 0, 1, 0, 1]
+
+    1 が複数立つ
+    集合・履歴・タグ表現に使われる

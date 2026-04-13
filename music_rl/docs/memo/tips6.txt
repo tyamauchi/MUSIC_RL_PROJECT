@@ -1,0 +1,268 @@
+dqn_agent.py
+
+import random
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import os
+import json
+
+from config.config import DEVICE, BATCH_SIZE, GAMMA, LEARNING_RATE, UPDATE_TARGET_FREQ
+from models.dqn import DuelingActionHeadDQN
+
+
+class DoubleDQNAgent:
+    def __init__(self, state_dim, action_feature_dim, use_dueling=True):
+        self.use_dueling = use_dueling
+        
+        if use_dueling:
+            self.policy_net = DuelingActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
+            self.target_net = DuelingActionHeadDQN(state_dim, action_feature_dim).to(DEVICE)
+        
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LEARNING_RATE)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode='max', factor=0.7, patience=30, min_lr=5e-5
+        )
+        
+        self.memory = None
+        self.steps_done = 0
+        self.episodes_done = 0
+
+    def select_action(self, state, action_features, epsilon):
+        if random.random() > epsilon:
+            with torch.no_grad():
+                state_tensor = torch.FloatTensor(state).to(DEVICE)
+                q_values = self.policy_net(state_tensor, action_features)
+                
+                track_history = np.array(state)[:20]
+                penalties = torch.zeros_like(q_values)
+                for i in range(action_features.size(0)):
+                    if i in track_history:
+                        penalties[0, i] = -2.0
+                
+                return torch.argmax(q_values + penalties).item()
+        else:
+            return random.randrange(action_features.size(0))
+
+    def train_step(self):
+        if len(self.memory) < BATCH_SIZE:
+            return 0.0
+        
+        states, actions, action_features, rewards, next_states, dones = self.memory.sample(BATCH_SIZE)
+        
+        states = states.to(DEVICE)
+        action_features = action_features.to(DEVICE)
+        rewards = rewards.to(DEVICE)
+        next_states = next_states.to(DEVICE)
+        dones = dones.to(DEVICE)
+        
+        current_q = self.policy_net(states, action_features).squeeze(1)
+        
+        with torch.no_grad():
+            next_q_policy = self.policy_net(next_states, action_features)
+            next_actions = next_q_policy.argmax(dim=1, keepdim=True)
+            
+            next_q_target = self.target_net(next_states, action_features)
+            next_q = next_q_target.gather(1, next_actions).squeeze(1)
+            
+            target_q = rewards + GAMMA * next_q * (1 - dones)
+        
+        loss = nn.SmoothL1Loss()(current_q, target_q)
+        
+        self.optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1.0)
+        self.optimizer.step()
+        
+        self.steps_done += 1
+        return loss.item()
+    
+    def update_target_network(self):
+        self.episodes_done += 1
+        if self.episodes_done % UPDATE_TARGET_FREQ == 0:
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+            print(f"  → ターゲットネットワーク更新 (Episode {self.episodes_done})")
+    
+    def save_model(self, save_dir, metrics, action_features):
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(self.policy_net.state_dict(), os.path.join(save_dir, 'policy_net.pth'))
+        torch.save(action_features, os.path.join(save_dir, 'action_features.pth'))
+        with open(os.path.join(save_dir, 'metrics.json'), 'w') as f:
+            json.dump(metrics, f, indent=2)
+    
+    def load_model(self, model_path):
+        self.policy_net.load_state_dict(torch.load(model_path, map_location=DEVICE))
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+
+
+
+この DoubleDQNAgentは：
+状態（state）
+→ 再生履歴・ユーザ反応など（state_dim 次元）
+行動（action）
+→ トラックID（action_features により特徴表現）
+目的
+→ ユーザ反応報酬を最大化するトラック推薦
+という 推薦システム向けDQN。
+
+１　import 部分
+    from config.config import DEVICE, BATCH_SIZE, GAMMA, LEARNING_RATE, UPDATE_TARGET_FREQ
+    from models.dqn import DuelingActionHeadDQN
+
+    ・主なハイパーパラメータ
+        DEVICE：CPU / GPU
+        BATCH_SIZE：Experience Replay のミニバッチ
+        GAMMA：割引率
+        LEARNING_RATE：学習率
+        UPDATE_TARGET_FREQ：ターゲットネット更新頻度
+
+    ・DuelingActionHeadDQN 
+        状態 + 行動特徴 → Q値
+        を出力するカスタムDQN。
+
+２. クラス定義
+    class DoubleDQNAgent:
+
+　  ・Double DQN
+　  ・Dueling Network（任意）
+
+３. __init__（初期化）
+    def __init__(self, state_dim, action_feature_dim, use_dueling=True):
+
+    ネットワーク構築
+    self.policy_net = DuelingActionHeadDQN(...)
+    self.target_net = DuelingActionHeadDQN(...)
+
+    policy_net：学習対象
+    target_net：安定化用（固定）
+
+    self.target_net.load_state_dict(self.policy_net.state_dict())
+
+
+    Optimizer & Scheduler
+    self.optimizer = optim.Adam(...)
+    self.scheduler = ReduceLROnPlateau(...)
+
+    報酬が伸びなくなったら 自動で学習率を下げる
+    推薦タスクではかなり有効
+
+    ・学習管理用変数
+    self.memory = None
+    self.steps_done = 0
+    self.episodes_done = 0
+
+４. select_action（ε-greedy 行動選択）
+    def select_action(self, state, action_features, epsilon):
+
+    exploitation（ε以外）
+    q_values = self.policy_net(state_tensor, action_features)
+
+
+    履歴ペナルティ（重要）
+    track_history = np.array(state)[:20]
+    penalties = torch.zeros_like(q_values)
+
+    if i in track_history:
+        penalties[0, i] = -2.0
+
+    意味：
+        直近20曲に含まれるトラックは
+        Q値から -2.0 のペナルティ
+        → 同じ曲の連続推薦を防ぐ
+    
+    行動決定：
+        return torch.argmax(q_values + penalties).item()
+    
+    exploration（ε以内）
+        return random.randrange(action_features.size(0))
+    
+５. train_step（1ステップ学習）
+    メモリ不足チェック
+    if len(self.memory) < BATCH_SIZE:
+        return 0.0
+
+    
+    サンプリング
+    states, actions, action_features, rewards, next_states, dones = self.memory.sample(...)
+
+    Experience Replay 形式：
+    (s, a, a_feat, r, s', done)
+
+    現在Q値
+    current_q = self.policy_net(states, action_features)
+    ※ Action Head 型なので actions を直接使っていない
+    → 行動は「特徴」で指定されている
+
+６. Double DQN の核心部分
+    next_q_policy = self.policy_net(next_states, action_features)
+    next_actions = next_q_policy.argmax(dim=1)
+    🔹 行動選択：policy_net
+
+    next_q_target = self.target_net(next_states, action_features)
+    next_q = next_q_target.gather(1, next_actions)
+    🔹 Q値評価：target_net
+    👉 これが Double DQN　
+
+
+    TDターゲット
+    target_q = rewards + GAMMA * next_q * (1 - dones)
+
+    損失関数
+    loss = nn.SmoothL1Loss()(current_q, target_q)
+
+    Huber Loss
+    外れ値に強い → 強化学習向き
+
+    勾配更新
+    loss.backward()
+    clip_grad_norm_(..., 1.0)
+    optimizer.step()
+    ※　勾配爆発防止あり
+
+
+７. update_target_network
+    if self.episodes_done % UPDATE_TARGET_FREQ == 0:
+    
+    一定エピソードごとに
+    policy → target にコピー
+    学習の安定化が目的
+
+８. モデル保存・ロード
+    torch.save(policy_net)
+    torch.save(action_features)
+    metrics.json
+
+    モデル
+    行動特徴
+    学習ログ
+    → 再現性が高い設計
+
+
+    ロード
+    self.policy_net.load_state_dict(...)
+    self.target_net.load_state_dict(self.policy_net.state_dict())
+
+
+    | 要素                | 意図         |
+    | ------------------ | ---------- |
+    | Action Feature DQN | トラック数増加に強い |
+    | Double DQN         | Q値の過大評価防止  |
+    | Dueling Network    | 状態の良し悪しを学習 |
+    | 履歴ペナルティ       　| 実運用向け推薦    |
+    | LR Scheduler       | 長期学習の安定    |
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,300 @@
+music_env.py
+
+import numpy as np
+import torch
+from config.config import DEVICE
+
+
+class MusicEnvironment:
+    def __init__(self, user_simulator, track_pool_size=256, session_length=20, state_dim=40):
+        self.user_simulator = user_simulator
+        self.track_pool_size = track_pool_size
+        self.session_length = session_length
+        self.state_dim = state_dim
+        self.current_step = 0
+        self.track_history = []
+        self.response_history = []
+        
+    def reset(self):
+        self.current_step = 0
+        self.track_history = [0.0] * (self.state_dim // 2)
+        self.response_history = [0.0] * (self.state_dim // 2)
+        return self._get_state()
+
+    def step(self, action):
+        state = self._get_state()
+        state_tensor = torch.FloatTensor([state + [float(action)]]).unsqueeze(0).to(DEVICE)
+        
+        with torch.no_grad():
+            response_prob, _ = self.user_simulator(state_tensor)
+        response = float(response_prob.squeeze())
+        
+        self.track_history[self.current_step] = float(action)
+        self.response_history[self.current_step] = response
+        self.current_step += 1
+        
+        base_reward = response
+        
+        if float(action) in self.track_history[:self.current_step-1]:
+            base_reward *= 0.2
+        
+        if self.current_step >= self.session_length:
+            responses = np.array(self.response_history)
+            avg_response = np.mean(responses)
+            
+            if avg_response > 0.9:
+                base_reward += 2.0
+            elif avg_response > 0.8:
+                base_reward += 1.0
+        
+        done = self.current_step >= self.session_length
+        return self._get_state(), base_reward, done
+
+    def _get_state(self):
+        return self.track_history + self.response_history
+
+
+1. 全体像（何をしているクラスか）
+    強化学習の Environment（OpenAI Gym風）
+    Agent が
+        action = 推薦する曲ID
+        state = 過去の推薦履歴＋ユーザー反応履歴
+    user_simulator（学習済みモデル）を使って
+    
+    ユーザーの反応確率を推定
+    反応をもとに 報酬設計
+    同じ曲の繰り返し推薦はペナルティ
+    セッション全体の満足度が高いとボーナス
+
+    ① __init__
+    def __init__(self, user_simulator, track_pool_size=256, session_length=20, state_dim=40):
+
+        user_simulator      ユーザーの反応を返す ニューラルネットモデル
+        track_pool_size     曲IDの最大数（0〜255）
+        session_length      1セッションで推薦する曲数（20曲）
+        state_dim           状態ベクトルの次元（40 = 20曲履歴 + 20反応履歴）
+
+        内部状態
+        self.current_step        # 何曲目か
+        self.track_history       # 推薦した曲IDの履歴
+        self.response_history    # ユーザー反応の履歴
+
+
+    ② reset()
+    def reset(self):
+        役割
+            新しいセッション開始
+            強化学習で言う env.reset()
+    
+        処理内容
+        self.track_history = [0.0] * 20
+        self.response_history = [0.0] * 20
+        初期状態では「まだ何も推薦していない」
+        state はゼロ埋め
+
+        戻り値
+        return self._get_state()
+        → 初期状態（長さ40のリスト）
+
+    ③ step(action)
+    def step(self, action):
+        役割
+            Agent が 1曲推薦したときの環境遷移
+            (next_state, reward, done) を返す
+        
+        (a) 現在の state を作る
+            state = self._get_state()
+            state_tensor = torch.FloatTensor([state + [float(action)]]).unsqueeze(0).to(DEVICE)
+
+            状態 + 今回の推薦曲ID を入力として
+            user_simulator に渡す形式に変換
+            [state, action] → ユーザー反応確率
+
+            ※ unsqueeze(0) により
+            (batch=1, seq=1, feature)
+            の形になっている（RNN想定）
+        
+        (b) ユーザー反応を予測
+            with torch.no_grad():
+                response_prob, _ = self.user_simulator(state_tensor)
+            response = float(response_prob.squeeze())
+
+            response は ユーザーがその曲を好む確率
+            例：
+                0.95 → とても好き
+                0.2 → ほぼ興味なし
+        
+        (c) 履歴を更新
+            self.track_history[self.current_step] = float(action)
+            self.response_history[self.current_step] = response
+            self.current_step += 1
+            時系列的に保存
+            state は固定長（20）なので index 指定
+
+        報酬設計（重要）
+        (d) 基本報酬
+            base_reward = response
+            ユーザーが喜ぶほど報酬が高い
+            implicit feedback（満足度最大化）
+
+        (e) 同一曲の繰り返しペナルティ
+            if float(action) in self.track_history[:self.current_step-1]:
+                base_reward *= 0.2
+        
+            既に推薦した曲を再推薦すると
+            報酬を 20% に減衰
+            多様性を促進
+        
+        (f) セッション全体のボーナス
+            if self.current_step >= self.session_length:
+                avg_response = np.mean(self.response_history)
+            セッション終了時のみ評価
+
+                if avg_response > 0.9:
+                    base_reward += 2.0
+                elif avg_response > 0.8:
+                    base_reward += 1.0
+            
+                長期満足度を最適化
+                単発報酬だけでなく
+                「20曲通して良かったか」を評価
+        
+        (g) 終了判定
+                done = self.current_step >= self.session_length
+        
+        (h) 戻り値
+            return self._get_state(), base_reward, done
+            next_state
+            reward
+            done
+    
+    ④ _get_state()
+        def _get_state(self):
+            return self.track_history + self.response_history
+    
+        状態 =
+            [推薦履歴(20), 反応履歴(20)]
+            時系列を「固定長ベクトル」として扱う設計
+
+
+この設計の特徴まとめ
+👍 良い点
+実ユーザーなしで 完全にオフライン学習可能
+多様性・長期満足度を考慮した報酬設計
+RNN / Transformer に拡張しやすい
+⚠️ 注意点・改善余地
+state が「順序を直接持たない」→ RNN前提なら OK
+action がそのまま数値 → embedding にすると安定
+response が確率値 → ノイズを入れるとより現実的
+
+
+
+＜MusicEnvironment 基本設計資料＞
+概要
+MusicEnvironmentは音楽推薦強化学習のためのカスタム環境クラス。OpenAI Gymスタイルのインターフェースを提供し、エージェントが音楽推薦戦略を学習するための枠組みを実装する。
+
+設計思想
+・ユーザー行動のシミュレーション: LSTMユーザーシミュレーターを組み込み、現実的なユーザー反応を模倣
+・セッションベース推薦: 1セッション20曲の音楽推薦シナリオを想定
+・状態表現: 過去の推薦履歴とユーザー反応を組み合わせた状態表現を採用
+
+主要コンポーネント
+初期化パラメータ
+・user_simulator: ユーザー行動を予測するLSTMモデル
+・track_pool_size: 楽曲プールサイズ（デフォルト256）
+・session_length: 1セッションの曲数（デフォルト20）
+・state_dim: 状態ベクトルの次元（デフォルト40）
+
+状態設計
+・次元: 40次元（20次元の楽曲履歴 + 20次元の応答履歴）
+・表現: 直近20曲の推薦履歴と各曲に対するユーザー応答率
+・初期化: ゼロ埋めされた状態から開始
+
+報酬設計
+1. 基本報酬: ユーザーの応答率（0-1）
+2. 重複ペナルティ: 過去に推薦済みの楽曲は報酬を0.2倍に低減
+3. セッションボーナス:
+・平均応答率>0.9: +2.0
+・平均応答率>0.8: +1.0
+
+主要メソッド
+1. reset()
+・環境を初期状態にリセット
+・履歴をゼロ埋め
+・初期状態を返却
+2. step(action)
+・アクション（楽曲ID）を受け取りユーザー応答を予測
+・履歴を更新し次状態を生成
+・報酬を計算して返却
+・セッション終了判定
+3. _get_state()
+・現在の楽曲履歴と応答履歴を連結して状態ベクトルを生成
+
+
+強化学習インターフェース
+・観測空間: 40次元連続ベクトル
+・行動空間: 0-255の離散値（楽曲ID）
+・報酬設計: 応答率ベースのスカラ報酬
+・エピソード: 固定長セッション（20ステップ）
+
+拡張性
+・ユーザーシミュレーターの差し替え可能
+・報酬関数のカスタマイズ容易
+・状態表現の拡張対応可能
+
+この設計により、エージェントはユーザーの嗜好を学習し、パーソナライズされた音楽推薦戦略を獲得できる。
+
+シンポジウム論文向け MusicEnvironment 設計説明
+1. はじめに
+本研究で提案するMusicEnvironmentは、音楽推薦システムにおける強化学習エージェントの学習環境として設計されたカスタム環境である。本環境は、現実的なユーザー行動を模倣するLSTMベースのユーザーシミュレーターを統合し、セッションベースの音楽推薦シナリオを実現する。
+
+2. 環境設計の特徴
+2.1 ユーザー行動モデリング
+LSTMユーザーシミュレーター: 過去の推薦履歴とユーザー反応の時系列パターンを学習
+応答率予測: 各楽曲推薦に対するユーザーの応答確率を0-1の連続値で出力
+現実的シミュレーション: 専門家データによる事前学習により、実際のユーザー行動に近い反応を生成
+2.2 状態空間設計
+40次元状態ベクトル: 過去20曲の推薦履歴（20次元）と対応する応答率（20次元）
+時系列情報の保持: ユーザーの嗜好変化と文脈依存性を状態として表現
+固定長表現: メモリ効率と計算効率の両立
+2.3 行動空間
+離散行動空間: 0-255の楽曲ID、計256曲の楽曲プールから選択
+大規模選択肢: 現実的な音楽サービスの楽曲数を考慮した設計
+3. 報酬設計
+3.1 基本報酬
+ユーザーの応答率を直接報酬として利用することで、即時的なユーザー満足度を最大化する学習を促進。
+
+3.2 ペナルティ機構
+重複推薦ペナルティ: 同一楽曲の再推薦を0.2倍に低減し、多様性を確保
+長期視点の報酬: セッション全体の平均応答率に応じてボーナスを付与
+3.3 報酬関数
+r_t = response_t × penalty_factor + session_bonus
+4. 技術的実装
+4.1 環境インターフェース
+OpenAI Gym準拠の標準インターフェースを実装：
+
+reset(): 環境初期化
+step(action): 行動実行と状態遷移
+_get_state(): 状態ベクトル生成
+4.2 セッション管理
+固定長セッション: 20曲の推薦で1エピソード
+動的状態更新: 推薦ごとに履歴を更新し、時系列的状態遷移を実現
+5. 学習プロセス
+本環境では、Double DQNエージェントが以下のプロセスで学習：
+
+状態観測: 現在の推薦履歴と応答履歴を観測
+行動選択: Q値に基づき次の推薦楽曲を選択
+ユーザー応答予測: LSTMシミュレーターが応答率を予測
+報酬獲得: 応答率に基づき報酬を計算
+経験蓄積: (状態, 行動, 報酬, 次状態)をリプレイバッファに保存
+6. 貢献と新規性
+統合的環境設計: ユーザーシミュレーターと強化学習環境の統合
+現実的報酬設計: 即時報酬と長期報酬のバランス考慮
+スケーラビリティ: 大規模楽曲プールへの対応可能性
+評価可能性: 一貫した評価基準による再現性の確保
+7. 結論
+MusicEnvironmentは、音楽推薦システムの強化学習研究のための効果的な実験基盤を提供する。本環境により、現実的なユーザー行動下での推薦戦略学習が可能となり、パーソナライズされた音楽推薦システムの発展に寄与する。
+
+
+
+
