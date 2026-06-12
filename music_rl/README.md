@@ -14,11 +14,13 @@ pip install -r requirements.txt
 python main.py
 ```
 
+`main.py` の `AGENT_TYPE` で切替: `"dqn"` / `"ppo"` / `"graph_dqn"` / `"hetero_graph_dqn"`（異種グラフ HGT、比較用）。
+
 ## 構造
 
 - config/ - 設定
 - models/ - ニューラルネットワーク
-- agents/ - DQNエージェント
+- agents/ - DQN / PPO / Graph DQN / **Hetero Graph DQN** エージェント
 - environment/ - 環境
 - memory/ - リプレイバッファ
 - utils/ - ユーティリティ関数

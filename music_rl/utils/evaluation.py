@@ -15,7 +15,20 @@ def evaluate_agent(agent, env, cached_action_features, n_episodes=50):
         episode_reward = 0
         
         for step in range(env.session_length):
-            action = agent.select_action(state, cached_action_features, epsilon=0.0)
+            # Simple Graph DQNの場合の処理
+            if hasattr(agent, 'data_source') and agent.data_source in ['lastfm', 'det_sim']:
+                # Simple Graph DQN: 候補トラックIDリストを渡す
+                # Last.fmの場合はグラフノード範囲（0-255）に制限
+                if agent.data_source == 'lastfm':
+                    n_graph = getattr(agent, 'num_nodes', 256)
+                    candidate_track_ids = list(range(n_graph))
+                else:
+                    candidate_track_ids = list(range(env.track_pool_size))
+                action = agent.select_action(state, candidate_track_ids, epsilon=0.0)
+            else:
+                # 従来のDQN/PPO: cached_action_featuresを渡す
+                action = agent.select_action(state, cached_action_features, epsilon=0.0)
+            
             next_state, reward, done = env.step(action)
             
             episode_reward += reward
